@@ -4,6 +4,7 @@
 <h2 align="center">Contents</h2>
 <ul>
   <li><a href="#install-all">Install (All Platforms)</a></li>
+  <li><a href="#remote">Remote Installation</a></li>
   <li><a href="#uninstall-linux">Uninstall Linux</a></li>
   <li><a href="#uninstall-macos">Uninstall macOS</a></li>
   <li><a href="#uninstall-wsl">Uninstall WSL</a></li>
@@ -17,6 +18,12 @@
 <pre><code class="language-bash">cargo install --path .
 gitnapse --help
 </code></pre>
+
+<h2 id="remote" align="center">Remote Installation</h2>
+<p>
+  For remote install/uninstall automation on Linux, macOS, and Windows (curl/wget/PowerShell), see
+  <code>docs/REMOTE_INSTALLATION.md</code>.
+</p>
 
 <h2 id="uninstall-linux" align="center">Uninstall Linux</h2>
 <pre><code class="language-bash">cargo uninstall gitnapse
