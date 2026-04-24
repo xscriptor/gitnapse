@@ -4,9 +4,18 @@
 <img src="https://raw.githubusercontent.com/xscriptor/xassets/main/github/gitnapse/gitnapse.svg" alt="GitNapse Icon" />
 </div>
 
+<div align="right">
+  <p><em>Explore <strong>Git</strong> from a new <strong>perspective</strong>, through a <strong>different lens</strong>, in your terminal.</em></p>
+</div>
+
+<div align="center">
+<img src="https://xscriptor.github.io/badges/social/github.svg" alt="Github badge" /> <img src="https://xscriptor.github.io/badges/languages/rust.svg" alt="Rust badge" /> <img src="https://xscriptor.github.io/badges/os/linux.svg" alt="Linux badge" /> <img src="https://xscriptor.github.io/badges/os/macos.svg" alt="Mac badge" /> <img src="https://xscriptor.github.io/badges/os/windows.svg" alt="Windows badge" />
+</div>
+
 <div id="content"></div>
 <h2 align="center">Contents</h2>
 <ul>
+  <li><a href="#previews">Previews</a></li>
   <li><a href="#overview">Overview</a></li>
   <li><a href="#status">Current Status</a></li>
   <li><a href="#quick-start">Quick Start</a></li>
@@ -15,6 +24,7 @@
   <li><a href="#about-x">X</a></li>
 </ul>
 
+<h2 id="previews" align="center">Previews</h2>
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/xscriptor/xassets/main/github/gitnapse/previews/preview01.png" alt="GitNapse Preview 01" />
