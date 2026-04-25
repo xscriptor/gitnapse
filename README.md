@@ -27,12 +27,16 @@
 <h2 id="previews" align="center">Previews</h2>
 
 <div align="center">
-  <img src="https://raw.githubusercontent.com/xscriptor/xassets/main/github/gitnapse/previews/preview01.png" alt="GitNapse Preview 01" />
+  <img src="https://raw.githubusercontent.com/xscriptor/xassets/main/github/gitnapse/previews/preview00.png" alt="GitNapse Preview 00" />
 </div>
 
 <details>
 <summary><b>More Previews...</b></summary>
 <br />
+
+<div align="center">
+  <img src="https://raw.githubusercontent.com/xscriptor/xassets/main/github/gitnapse/previews/preview01.png" alt="GitNapse Preview 01" />
+</div>
 
 <div align="center">
   <img src="https://raw.githubusercontent.com/xscriptor/xassets/main/github/gitnapse/previews/preview02.png" alt="GitNapse Preview 02" />
