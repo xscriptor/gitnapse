@@ -175,20 +175,25 @@ pub fn render(frame: &mut Frame<'_>, app: &App) {
 }
 
 fn render_repo_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
-    let items = app
-        .repos
+    let viewport_rows = usize::from(area.height.saturating_sub(2)).max(1);
+    let max_start = app.repos.len().saturating_sub(viewport_rows);
+    let start = app.selected_repo.saturating_sub(viewport_rows / 2).min(max_start);
+    let end = (start + viewport_rows).min(app.repos.len());
+
+    let items = app.repos[start..end]
         .iter()
         .enumerate()
         .map(|(index, repo)| {
-            let marker = if index == app.selected_repo { ">" } else { " " };
+            let absolute = start + index;
+            let marker = if absolute == app.selected_repo { ">" } else { " " };
             let desc = repo.description.as_deref().unwrap_or("No description");
             let lang = repo.language.as_deref().unwrap_or("unknown");
             let line = format!(
                 "{marker} {}/{} | ★{} | {} | {}",
                 repo.owner.login, repo.name, repo.stargazers_count, lang, desc
             );
-            let style = if index == app.selected_repo {
-                theme::selection_style(index)
+            let style = if absolute == app.selected_repo {
+                theme::selection_style(absolute)
             } else {
                 Style::default()
             };
@@ -198,8 +203,12 @@ fn render_repo_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
 
     let block = Block::default()
         .title(format!(
-            "Repositories (page {} | per_page {} | [ prev ] next)",
-            app.search_page, app.per_page
+            "Repositories (page {} | per_page {} | shown {}-{} / {} | [ prev ] next)",
+            app.search_page,
+            app.per_page,
+            if app.repos.is_empty() { 0 } else { start + 1 },
+            end,
+            app.repos.len()
         ))
         .borders(Borders::ALL)
         .border_style(if app.focus == Focus::Repos {

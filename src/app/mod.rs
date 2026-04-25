@@ -436,6 +436,17 @@ impl App {
         (start, end)
     }
 
+    fn repo_window(&self, area_height: u16) -> (usize, usize) {
+        let viewport_rows = usize::from(area_height.saturating_sub(2)).max(1);
+        let max_start = self.repos.len().saturating_sub(viewport_rows);
+        let start = self
+            .selected_repo
+            .saturating_sub(viewport_rows / 2)
+            .min(max_start);
+        let end = (start + viewport_rows).min(self.repos.len());
+        (start, end)
+    }
+
     fn back_to_repo_list(&mut self) {
         if self.current_repo.is_some() {
             self.current_repo = None;
@@ -804,8 +815,9 @@ impl App {
             } else {
                 self.focus = Focus::Repos;
                 let content_row = row.saturating_sub(panes.repo_or_tree.y.saturating_add(1));
-                let idx = usize::from(content_row);
-                if idx < self.repos.len() {
+                let (start, end) = self.repo_window(panes.repo_or_tree.height);
+                let idx = start + usize::from(content_row);
+                if idx < end && idx < self.repos.len() {
                     self.selected_repo = idx;
                     if self.is_double_click_repo(idx) {
                         self.open_selected_repo();
