@@ -8,6 +8,7 @@
   <li><a href="#oauth-device-flow">OAuth Device Flow with octocrab</a></li>
   <li><a href="#github-setup">GitHub Configuration</a></li>
   <li><a href="#commands">Commands</a></li>
+  <li><a href="#tui-behavior">TUI Behavior</a></li>
   <li><a href="#security">Security Notes</a></li>
 </ul>
 
@@ -98,12 +99,23 @@ gitnapse auth oauth login --scope read:user
 o
 </code></pre>
 <p>
-  The app opens an OAuth Client ID modal and then starts the device login flow.
+  The app performs a quick OAuth/authentication status check and prints guidance to use CLI login.
 </p>
 
 <p><strong>Short timeout tuning:</strong></p>
 <pre><code class="language-bash">gitnapse auth oauth login --client-id YOUR_OAUTH_CLIENT_ID --timeout-secs 1200
 </code></pre>
+
+<p><strong>Check OAuth state:</strong></p>
+<pre><code class="language-bash">gitnapse auth oauth status
+</code></pre>
+
+<h2 id="tui-behavior" align="center">TUI Behavior</h2>
+<ul>
+  <li>OAuth interactive login is CLI-first for reliability across terminal multiplexers and alternate screen modes.</li>
+  <li>Use <code>gitnapse auth oauth login</code> in normal terminal mode for device flow URL/code interaction.</li>
+  <li>Inside TUI, key <code>o</code> is intentionally reduced to quick status/help behavior.</li>
+</ul>
 
 <h2 id="security" align="center">Security Notes</h2>
 <ul>

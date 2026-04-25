@@ -163,3 +163,27 @@ pub fn oauth_device_login_cli(
     println!("OAuth login completed. Token saved securely for user: {login}");
     Ok(())
 }
+
+pub fn oauth_status_cli() -> Result<()> {
+    let token = auth::load_token()?;
+    let oauth_session_present = oauth_session::load_session()?.is_some();
+
+    if token.is_none() {
+        println!("oauth_logged_in=false");
+        println!("authenticated=false");
+        println!("oauth_session_present={oauth_session_present}");
+        return Ok(());
+    }
+
+    let client = GitHubClient::new(token.as_deref())?;
+    let user = client.fetch_authenticated_user()?;
+    let authenticated = user.is_some();
+
+    println!("oauth_logged_in={}", oauth_session_present && authenticated);
+    println!("authenticated={authenticated}");
+    println!("oauth_session_present={oauth_session_present}");
+    if let Some(login) = user {
+        println!("user={login}");
+    }
+    Ok(())
+}

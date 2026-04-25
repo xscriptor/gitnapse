@@ -657,6 +657,19 @@ impl App {
         }
     }
 
+    fn run_oauth_quick_check(&mut self) {
+        match oauth::oauth_status_cli() {
+            Ok(()) => {
+                self.status =
+                    "OAuth status printed in terminal. For login use: gitnapse auth oauth login"
+                        .to_string();
+            }
+            Err(error) => {
+                self.status = format!("OAuth status check failed: {error}");
+            }
+        }
+    }
+
     fn run_oauth_login_flow(&mut self, client_id: Option<String>) {
         self.status = "Starting OAuth device flow...".to_string();
 
@@ -723,7 +736,7 @@ impl App {
                 self.input_buffer.clear();
             }
             KeyCode::Char('o') => {
-                self.focus = Focus::OAuthClientIdInput;
+                self.run_oauth_quick_check();
             }
             KeyCode::Char('c') => {
                 if self.current_repo.is_some() {

@@ -63,7 +63,7 @@ fn nav_labels() -> [&'static str; 17] {
         " d Download File ",
         " c Clone ",
         " t Token ",
-        " o OAuth Login ",
+        " o OAuth State ",
         " Esc Back ",
         " Mouse Click/Scroll ",
     ]

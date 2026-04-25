@@ -45,7 +45,7 @@
       <td><code>gitnapse run --query "@me"</code></td>
       <td>List authenticated repositories (including private)</td>
       <td><code>gitnapse run --query "@me"</code></td>
-      <td>Requires valid login/token; supports optional filter: <code>@me keyword</code></td>
+      <td>Requires valid login/token; supports optional filters: text terms and <code>language:</code></td>
     </tr>
     <tr>
       <td><code>gitnapse auth set</code></td>
@@ -76,6 +76,12 @@
       <td>OAuth login (device flow via octocrab)</td>
       <td><code>gitnapse auth oauth login --client-id YOUR_OAUTH_CLIENT_ID --scope read:user --scope repo</code></td>
       <td>Starts browser-based device authorization and stores access token securely</td>
+    </tr>
+    <tr>
+      <td><code>gitnapse auth oauth status</code></td>
+      <td>Show OAuth/authentication state</td>
+      <td><code>gitnapse auth oauth status</code></td>
+      <td>Prints <code>oauth_logged_in=true|false</code>, <code>authenticated=true|false</code>, and current user when available</td>
     </tr>
     <tr>
       <td><code>gitnapse download-file ...</code></td>
@@ -113,7 +119,7 @@
     <tr><td><code>d</code></td><td>Preview</td><td>Download modal</td><td>Save current previewed file to local path</td></tr>
     <tr><td><code>Del</code></td><td>Path modals</td><td>Clear path input</td><td>Works in clone/download path inputs</td></tr>
     <tr><td><code>t</code></td><td>Global</td><td>Token modal</td><td>Save token from inside the TUI</td></tr>
-    <tr><td><code>o</code></td><td>Global</td><td>OAuth modal</td><td>Client ID is optional; press <code>Enter</code> empty to use default and start device-flow login</td></tr>
+    <tr><td><code>o</code></td><td>Global</td><td>OAuth quick check</td><td>Does not start login; runs status check and tells you to use CLI login command</td></tr>
     <tr><td><code>q</code></td><td>Global</td><td>Quit</td><td>Exit application</td></tr>
     <tr><td>Mouse left click</td><td>Tree / Preview / Repos</td><td>Focus & select</td><td>Single click selects, double click opens (repo/file)</td></tr>
     <tr><td>Mouse wheel</td><td>Tree / Preview</td><td>Scroll</td><td>Scroll behavior depends on pointer position</td></tr>
@@ -127,7 +133,9 @@
 </p>
 <ul>
   <li>Inside TUI search input (<code>/</code>): <code>@me</code></li>
-  <li>Optional filter: <code>@me rust</code> or <code>me:rust</code></li>
+  <li>Optional text filter: <code>@me rust</code> or <code>me:rust</code></li>
+  <li>Language filter: <code>@me language:rust</code> or <code>@me lang:javascript</code></li>
+  <li>Combined filters: <code>@me language:rust private</code> or <code>@me language:rust,javascript api</code></li>
   <li>CLI start: <code>gitnapse run --query "@me"</code></li>
 </ul>
 <p>

@@ -114,6 +114,8 @@ enum OauthAction {
         #[arg(long, default_value_t = 900)]
         timeout_secs: u64,
     },
+    /// Show OAuth login/authentication state
+    Status,
 }
 
 fn main() -> Result<()> {
@@ -133,6 +135,7 @@ fn main() -> Result<()> {
                     scope,
                     timeout_secs,
                 } => oauth::oauth_device_login_cli(client_id, scope, timeout_secs),
+                OauthAction::Status => oauth::oauth_status_cli(),
             },
         },
         None => app::run(),

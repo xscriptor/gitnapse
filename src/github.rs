@@ -13,6 +13,12 @@ pub struct GitHubClient {
     client: Client,
 }
 
+#[derive(Debug, Clone)]
+struct MeQuery {
+    text_terms: Vec<String>,
+    languages: Vec<String>,
+}
+
 impl GitHubClient {
     fn api_base() -> String {
         std::env::var("GITNAPSE_GITHUB_API")
@@ -22,25 +28,50 @@ impl GitHubClient {
             .unwrap_or_else(|| GITHUB_API.to_string())
     }
 
-    fn parse_me_query(query: &str) -> Option<String> {
+    fn parse_me_query(query: &str) -> Option<MeQuery> {
         let trimmed = query.trim();
-        if trimmed.eq_ignore_ascii_case("@me") {
-            return Some(String::new());
+        let rest = if trimmed.eq_ignore_ascii_case("@me") {
+            ""
+        } else if let Some(rest) = trimmed.strip_prefix("@me ") {
+            rest.trim()
+        } else if let Some(rest) = trimmed.strip_prefix("me:") {
+            rest.trim()
+        } else {
+            return None;
+        };
+
+        let mut text_terms = Vec::new();
+        let mut languages = Vec::new();
+        for raw in rest.split_whitespace() {
+            if let Some(lang_expr) = raw
+                .strip_prefix("language:")
+                .or_else(|| raw.strip_prefix("lang:"))
+            {
+                for lang in lang_expr.split(',') {
+                    let lang = lang.trim().to_lowercase();
+                    if !lang.is_empty() {
+                        languages.push(lang);
+                    }
+                }
+            } else {
+                let term = raw.trim().to_lowercase();
+                if !term.is_empty() {
+                    text_terms.push(term);
+                }
+            }
         }
-        if let Some(rest) = trimmed.strip_prefix("@me ") {
-            return Some(rest.trim().to_string());
-        }
-        if let Some(rest) = trimmed.strip_prefix("me:") {
-            return Some(rest.trim().to_string());
-        }
-        None
+
+        Some(MeQuery {
+            text_terms,
+            languages,
+        })
     }
 
     fn list_authenticated_repositories(
         &self,
         page: u32,
         per_page: u8,
-        filter: Option<&str>,
+        query: &MeQuery,
     ) -> Result<Vec<RepoSummary>> {
         let api_base = Self::api_base();
         let url = format!(
@@ -70,18 +101,35 @@ impl GitHubClient {
             .json()
             .context("Invalid authenticated repositories response from GitHub")?;
 
-        if let Some(text) = filter.map(|v| v.trim()).filter(|v| !v.is_empty()) {
-            let needle = text.to_lowercase();
-            repos.retain(|repo| {
-                repo.full_name.to_lowercase().contains(&needle)
-                    || repo.name.to_lowercase().contains(&needle)
-                    || repo
-                        .description
-                        .as_ref()
-                        .map(|desc| desc.to_lowercase().contains(&needle))
-                        .unwrap_or(false)
-            });
-        }
+        repos.retain(|repo| {
+            let language_match = if query.languages.is_empty() {
+                true
+            } else {
+                repo.language
+                    .as_deref()
+                    .map(|lang| lang.to_lowercase())
+                    .map(|lang| query.languages.iter().any(|candidate| candidate == &lang))
+                    .unwrap_or(false)
+            };
+            if !language_match {
+                return false;
+            }
+
+            if query.text_terms.is_empty() {
+                return true;
+            }
+
+            let haystack = format!(
+                "{} {} {}",
+                repo.full_name.to_lowercase(),
+                repo.name.to_lowercase(),
+                repo.description
+                    .as_ref()
+                    .map(|desc| desc.to_lowercase())
+                    .unwrap_or_default()
+            );
+            query.text_terms.iter().all(|term| haystack.contains(term))
+        });
 
         Ok(repos)
     }
@@ -117,8 +165,8 @@ impl GitHubClient {
 
         let page = page.max(1);
         let per_page = per_page.clamp(1, 100);
-        if let Some(filter) = Self::parse_me_query(query) {
-            return self.list_authenticated_repositories(page, per_page, Some(filter.as_str()));
+        if let Some(me_query) = Self::parse_me_query(query) {
+            return self.list_authenticated_repositories(page, per_page, &me_query);
         }
 
         let api_base = Self::api_base();

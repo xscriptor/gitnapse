@@ -106,7 +106,7 @@ fn me_query_lists_and_filters_authenticated_repos() {
     with_api_base(&server.url(), || {
         let client = GitHubClient::new(Some("token")).expect("client");
         let repos = client
-            .search_repositories_page("@me rust", 1, 30)
+            .search_repositories_page("@me language:rust private", 1, 30)
             .expect("search");
         assert_eq!(repos.len(), 1);
         assert_eq!(repos[0].full_name, "me/alpha-rust");

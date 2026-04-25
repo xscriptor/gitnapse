@@ -153,6 +153,7 @@ jobs:
       - build-macos
     permissions:
       contents: write
+      id-token: write
     steps:
       - name: Download build artifacts
         uses: actions/download-artifact@v5
@@ -160,11 +161,27 @@ jobs:
           pattern: asset-*
           path: dist
           merge-multiple: true
+      - name: Generate GitHub App token
+        id: app_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.RELEASE_GH_APP_ID }}
+          private-key: ${{ secrets.RELEASE_GH_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
       - name: Show assets
         run: ls -lah dist
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+      - name: Sign assets (keyless)
+        run: |
+          for file in dist/*; do
+            cosign sign-blob --yes "$file" \
+              --output-signature "${file}.sig" \
+              --output-certificate "${file}.pem"
+          done
       - name: Create or update release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app_token.outputs.token }}
         run: |
           gh release view "${RELEASE_TAG}" >/dev/null 2>&1 || \
           gh release create "${RELEASE_TAG}" --title "${RELEASE_TAG}" --generate-notes
