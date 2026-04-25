@@ -27,14 +27,17 @@ impl AccountConfig {
 
         let raw = fs::read_to_string(&file)
             .with_context(|| format!("Cannot read config file: {}", file.display()))?;
-        let cfg: AccountConfig = serde_json::from_str(&raw).context("Invalid account config format")?;
+        let cfg: AccountConfig =
+            serde_json::from_str(&raw).context("Invalid account config format")?;
         Ok(cfg)
     }
 
     pub fn save(&self) -> Result<()> {
         let file = config_file()?;
-        let content = serde_json::to_string_pretty(self).context("Cannot serialize account config")?;
-        fs::write(&file, content).with_context(|| format!("Cannot write config file: {}", file.display()))?;
+        let content =
+            serde_json::to_string_pretty(self).context("Cannot serialize account config")?;
+        fs::write(&file, content)
+            .with_context(|| format!("Cannot write config file: {}", file.display()))?;
         Ok(())
     }
 }
@@ -42,7 +45,11 @@ impl AccountConfig {
 pub fn config_file() -> Result<PathBuf> {
     let dirs = ProjectDirs::from("com", "GitNapse", "GitNapse")
         .ok_or_else(|| anyhow!("Unable to resolve project config directory"))?;
-    fs::create_dir_all(dirs.config_dir())
-        .with_context(|| format!("Cannot create config directory: {}", dirs.config_dir().display()))?;
+    fs::create_dir_all(dirs.config_dir()).with_context(|| {
+        format!(
+            "Cannot create config directory: {}",
+            dirs.config_dir().display()
+        )
+    })?;
     Ok(Path::new(dirs.config_dir()).join("account.json"))
 }

@@ -47,12 +47,25 @@ pub fn selection_style(index: usize) -> Style {
         .add_modifier(Modifier::BOLD)
 }
 
-fn nav_labels() -> [&'static str; 16] {
+fn nav_labels() -> [&'static str; 17] {
     [
-        " / Search ", " Enter Open/Preview ", " ↑/↓ Move ", " ← Prev Page ", " → Next Page ",
-        " Tab Repos/Tree/Preview ", " PgUp/PgDn Preview ", " Home/End Preview ",
-        " b Branch ", " f Find File ", " v Tree View ", " d Download File ", " c Clone ",
-        " t Token ", " Mouse Click/Scroll ", " Esc Back to Repo List ",
+        " / Search ",
+        " Enter Open/Preview ",
+        " ↑/↓ Move ",
+        " ← Prev Page ",
+        " → Next Page ",
+        " Tab Repos/Tree/Preview ",
+        " PgUp/PgDn Preview ",
+        " Home/End Preview ",
+        " b Branch ",
+        " f Find File ",
+        " v Tree View ",
+        " d Download File ",
+        " c Clone ",
+        " t Token ",
+        " o OAuth State ",
+        " Esc Back ",
+        " Mouse Click/Scroll ",
     ]
 }
 

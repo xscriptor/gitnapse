@@ -20,6 +20,7 @@
   <li><a href="#status">Current Status</a></li>
   <li><a href="#quick-start">Quick Start</a></li>
   <li><a href="#remote-install">Remote Install / Uninstall</a></li>
+  <li><a href="#release-automation">Release Automation</a></li>
   <li><a href="#docs">Documentation</a></li>
   <li><a href="#about-x">X</a></li>
 </ul>
@@ -73,6 +74,7 @@
 <pre><code class="language-bash">gitnapse
 gitnapse run --query "xscriptor" --page 1 --per-page 30 --cache-ttl-secs 900
 gitnapse auth set
+gitnapse auth oauth login --client-id YOUR_OAUTH_CLIENT_ID --scope read:user --scope repo
 </code></pre>
 
 <h2 id="remote-install" align="center">Remote Install / Uninstall</h2>
@@ -91,19 +93,35 @@ wget -qO- https://raw.githubusercontent.com/xscriptor/gitnapse/main/scripts/inst
 &amp; ([scriptblock]::Create((irm https://raw.githubusercontent.com/xscriptor/gitnapse/main/scripts/install.ps1))) -Action uninstall -Cleanup
 </code></pre>
 
+<h2 id="release-automation" align="center">Release Automation</h2>
+<p>
+  GitHub Actions release pipeline is available in <code>.github/workflows/release.yml</code>.
+  Push a version tag like <code>v1.0.0</code> to build Windows, Linux (Ubuntu/Arch/Fedora), and macOS assets and publish them in GitHub Releases.
+</p>
+
 <h2 id="docs" align="center">Documentation</h2>
 <ul>
-  <li><code>docs/INSTALLATION.md</code> - full install and uninstall by platform</li>
-  <li><code>docs/REMOTE_INSTALLATION.md</code> - remote scripts, parameters, and examples</li>
-  <li><code>docs/USAGE.md</code> - full command and in-app usage guide</li>
-  <li><code>docs/ARCHITECTURE.md</code> - technical architecture details</li>
-  <li><code>docs/IMPLEMENTATION_LOG.md</code> - implementation materialization log</li>
+  <li><a href="./docs/INSTALLATION.md"><code>INSTALLATION.md</code></a> - full install and uninstall by platform</li>
+  <li><a href="./docs/REMOTE_INSTALLATION.md"><code>REMOTE_INSTALLATION.md</code></a> - remote scripts, parameters, and examples</li>
+  <li><a href="./docs/OAUTH_AUTHENTICATION.md"><code>OAUTH_AUTHENTICATION.md</code></a> - OAuth login flows with octocrab and secure setup</li>
+  <li><a href="./docs/COLLABORATIVE_SECTION.md"><code>COLLABORATIVE_SECTION.md</code></a> - branch protection, PR workflow, and release publishing collaboration guide</li>
+  <li><a href="./docs/RELEASE_WORKFLOW.md"><code>RELEASE_WORKFLOW.md</code></a> - release build/publish workflow and versioning commands</li>
+  <li><a href="./docs/USAGE.md"><code>USAGE.md</code></a> - full command and in-app usage guide</li>
+  <li><a href="./docs/ARCHITECTURE.md"><code>ARCHITECTURE.md</code></a> - technical architecture details</li>
+  <li><a href="./docs/IMPLEMENTATION_LOG.md"><code>IMPLEMENTATION_LOG.md</code></a> - implementation materialization log</li>
+  <li><a href="./docs/tests/README.md"><code>docs/tests/README.md</code></a> - test and security audit documentation index</li>
+  <li><a href="./SECURITY.md"><code>SECURITY.md</code></a> - vulnerability reporting and response policy</li>
+  <li><a href="./CODE_OF_CONDUCT.md"><code>CODE_OF_CONDUCT.md</code></a> - expected behavior and community standards</li>
+  <li><a href="./CONTRIBUTING.md"><code>CONTRIBUTING.md</code></a> - contribution workflow and pull request guidelines</li>
 </ul>
 
 
 <div id="about-x" align="center">
 <h2>X</h2>
 
+<div>
+<img src="./assets/gitnapse-icon.png" width="50">
+</div>
 <a href="https://dev.xscriptor.com">
   <img src="https://xscriptor.github.io/icons/icons/code/product-design/xsvg/verified-filled.svg" width="24" alt="X Web" />
 </a>

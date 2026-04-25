@@ -6,6 +6,7 @@ use crate::cache::PreviewCache;
 use crate::config::AccountConfig;
 use crate::github::GitHubClient;
 use crate::models::{RepoNode, RepoSummary};
+use crate::oauth;
 use crate::syntax::highlight_content;
 use anyhow::{Context, Result, anyhow};
 use crossterm::event::{
@@ -16,9 +17,9 @@ use crossterm::execute;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
+use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::text::Line;
-use ratatui::Terminal;
 use std::io::stdout;
 use std::path::PathBuf;
 use std::process::Command;
@@ -56,6 +57,7 @@ pub enum Focus {
     DownloadPath,
     ClonePath,
     TokenInput,
+    OAuthClientIdInput,
     BranchPicker,
 }
 
@@ -80,6 +82,7 @@ pub struct App {
     pub status: String,
     pub focus: Focus,
     pub input_buffer: String,
+    pub oauth_client_id_input: String,
     pub clone_path_input: String,
     pub should_quit: bool,
     pub current_repo: Option<RepoSummary>,
@@ -126,11 +129,17 @@ impl App {
             tree_text_mode: false,
             status: match auth_user.as_ref() {
                 Some(login) => format!("Authenticated as {login}. Press / to search."),
-                None => "No validated token. Press t to save one or continue anonymously."
-                    .to_string(),
+                None => {
+                    "No validated token. Press t to save one or continue anonymously.".to_string()
+                }
             },
             focus: Focus::Repos,
             input_buffer: String::new(),
+            oauth_client_id_input: std::env::var("GITNAPSE_GITHUB_OAUTH_CLIENT_ID")
+                .or_else(|_| std::env::var("GITHUB_CLIENT_ID"))
+                .unwrap_or_default()
+                .trim()
+                .to_string(),
             clone_path_input: account.preferred_clone_dir,
             should_quit: false,
             current_repo: None,
@@ -168,7 +177,8 @@ impl App {
             return;
         }
         if self.selected_node + TREE_LOAD_THRESHOLD >= self.tree_visible_limit {
-            self.tree_visible_limit = (self.tree_visible_limit + TREE_PAGE_SIZE).min(self.tree_all.len());
+            self.tree_visible_limit =
+                (self.tree_visible_limit + TREE_PAGE_SIZE).min(self.tree_all.len());
             self.status = format!(
                 "Loaded more tree entries ({}/{}).",
                 self.tree_visible_limit,
@@ -186,10 +196,11 @@ impl App {
     }
 
     fn search(&mut self) {
-        match self
-            .github
-            .search_repositories_page(&self.search_query, self.search_page, self.per_page)
-        {
+        match self.github.search_repositories_page(
+            &self.search_query,
+            self.search_page,
+            self.per_page,
+        ) {
             Ok(items) => {
                 if items.is_empty() && self.search_page > 1 {
                     self.search_page = self.search_page.saturating_sub(1);
@@ -316,7 +327,8 @@ impl App {
 
         match self.github.fetch_file_content(&full_name, &node_path) {
             Ok(content) => {
-                self.preview_cache.put(&full_name, &branch, &node_path, &content);
+                self.preview_cache
+                    .put(&full_name, &branch, &node_path, &content);
                 self.preview_title = format!("{}/{}", full_name, node_path);
                 self.preview_lines = highlight_content(&content, &node_path, 300);
                 self.preview_scroll = 0;
@@ -343,14 +355,14 @@ impl App {
         }
 
         let destination_path = PathBuf::from(destination);
-        if !destination_path.exists() {
-            if let Err(error) = std::fs::create_dir_all(&destination_path) {
-                self.status = format!(
-                    "Cannot create destination path {}: {error}",
-                    destination_path.display()
-                );
-                return;
-            }
+        if !destination_path.exists()
+            && let Err(error) = std::fs::create_dir_all(&destination_path)
+        {
+            self.status = format!(
+                "Cannot create destination path {}: {error}",
+                destination_path.display()
+            );
+            return;
         }
 
         let output = Command::new("git")
@@ -383,9 +395,9 @@ impl App {
             return;
         }
 
-        match auth::save_token(&token_owned)
-            .and_then(|_| GitHubClient::new(Some(&token_owned)).context("Cannot rebuild HTTP client"))
-        {
+        match auth::save_token(&token_owned).and_then(|_| {
+            GitHubClient::new(Some(&token_owned)).context("Cannot rebuild HTTP client")
+        }) {
             Ok(client) => {
                 self.github = client;
                 self.auth_user = self.github.fetch_authenticated_user().ok().flatten();
@@ -409,13 +421,16 @@ impl App {
             Focus::DownloadPath => self.handle_download_path_input(code),
             Focus::ClonePath => self.handle_clone_path_input(code),
             Focus::TokenInput => self.handle_token_input(code),
+            Focus::OAuthClientIdInput => self.handle_oauth_client_id_input(code),
             Focus::BranchPicker => self.handle_branch_picker_input(code),
             Focus::Repos | Focus::Tree | Focus::Preview => self.handle_navigation(code),
         }
     }
 
     fn max_preview_scroll(&self, viewport_rows: usize) -> usize {
-        self.preview_lines.len().saturating_sub(viewport_rows.max(1))
+        self.preview_lines
+            .len()
+            .saturating_sub(viewport_rows.max(1))
     }
 
     fn scroll_preview_down(&mut self, step: usize, viewport_rows: usize) {
@@ -431,7 +446,10 @@ impl App {
         let visible = self.visible_tree();
         let viewport_rows = usize::from(area_height.saturating_sub(2)).max(1);
         let max_start = visible.len().saturating_sub(viewport_rows);
-        let start = self.selected_node.saturating_sub(viewport_rows / 2).min(max_start);
+        let start = self
+            .selected_node
+            .saturating_sub(viewport_rows / 2)
+            .min(max_start);
         let end = (start + viewport_rows).min(visible.len());
         (start, end)
     }
@@ -488,7 +506,10 @@ impl App {
                 {
                     self.selected_node = idx;
                     self.ensure_lazy_tree_progress();
-                    self.status = format!("Found file match for \"{}\".", self.tree_search_input.trim());
+                    self.status = format!(
+                        "Found file match for \"{}\".",
+                        self.tree_search_input.trim()
+                    );
                 } else {
                     self.status = format!("No file matches \"{}\".", self.tree_search_input.trim());
                 }
@@ -610,6 +631,80 @@ impl App {
         }
     }
 
+    fn handle_oauth_client_id_input(&mut self, code: KeyCode) {
+        match code {
+            KeyCode::Esc => {
+                self.focus = if self.current_repo.is_some() {
+                    Focus::Tree
+                } else {
+                    Focus::Repos
+                };
+            }
+            KeyCode::Enter => {
+                let client_id = if self.oauth_client_id_input.trim().is_empty() {
+                    None
+                } else {
+                    Some(self.oauth_client_id_input.trim().to_string())
+                };
+                self.run_oauth_login_flow(client_id);
+            }
+            KeyCode::Delete => self.oauth_client_id_input.clear(),
+            KeyCode::Backspace => {
+                self.oauth_client_id_input.pop();
+            }
+            KeyCode::Char(ch) => self.oauth_client_id_input.push(ch),
+            _ => {}
+        }
+    }
+
+    fn run_oauth_quick_check(&mut self) {
+        match oauth::oauth_status_cli() {
+            Ok(()) => {
+                self.status =
+                    "OAuth status printed in terminal. For login use: gitnapse auth oauth login"
+                        .to_string();
+            }
+            Err(error) => {
+                self.status = format!("OAuth status check failed: {error}");
+            }
+        }
+    }
+
+    fn run_oauth_login_flow(&mut self, client_id: Option<String>) {
+        self.status = "Starting OAuth device flow...".to_string();
+
+        // Temporarily leave TUI mode to let user interact with OAuth instructions in terminal.
+        let _ = disable_raw_mode();
+        let _ = execute!(stdout(), LeaveAlternateScreen, DisableMouseCapture);
+
+        let oauth_result =
+            oauth::oauth_device_login_cli(client_id, vec!["read:user".to_string()], 900);
+
+        let _ = enable_raw_mode();
+        let _ = execute!(stdout(), EnterAlternateScreen, EnableMouseCapture);
+
+        match oauth_result {
+            Ok(()) => {
+                if let Ok(token) = auth::load_token()
+                    && let Ok(client) = GitHubClient::new(token.as_deref())
+                {
+                    self.github = client;
+                    self.auth_user = self.github.fetch_authenticated_user().ok().flatten();
+                }
+                self.status = "OAuth login completed and session saved.".to_string();
+            }
+            Err(error) => {
+                self.status = format!("OAuth login failed: {error}");
+            }
+        }
+
+        self.focus = if self.current_repo.is_some() {
+            Focus::Tree
+        } else {
+            Focus::Repos
+        };
+    }
+
     fn handle_branch_picker_input(&mut self, code: KeyCode) {
         match code {
             KeyCode::Esc => self.focus = Focus::Tree,
@@ -639,6 +734,9 @@ impl App {
             KeyCode::Char('t') => {
                 self.focus = Focus::TokenInput;
                 self.input_buffer.clear();
+            }
+            KeyCode::Char('o') => {
+                self.run_oauth_quick_check();
             }
             KeyCode::Char('c') => {
                 if self.current_repo.is_some() {
@@ -739,12 +837,14 @@ impl App {
             }
             KeyCode::Down => {
                 if self.focus == Focus::Tree && !self.tree_all.is_empty() {
-                    self.selected_node = (self.selected_node + 1).min(self.tree_all.len().saturating_sub(1));
+                    self.selected_node =
+                        (self.selected_node + 1).min(self.tree_all.len().saturating_sub(1));
                     self.ensure_lazy_tree_progress();
                 } else if self.focus == Focus::Preview {
                     self.scroll_preview_down(1, 30);
                 } else if !self.repos.is_empty() {
-                    self.selected_repo = (self.selected_repo + 1).min(self.repos.len().saturating_sub(1));
+                    self.selected_repo =
+                        (self.selected_repo + 1).min(self.repos.len().saturating_sub(1));
                 }
             }
             KeyCode::Up => {
@@ -801,11 +901,7 @@ impl App {
                 if idx < end && idx < self.tree_all.len() {
                     self.selected_node = idx;
                     self.ensure_lazy_tree_progress();
-                    if self
-                        .tree_all
-                        .get(idx)
-                        .map(|n| !n.is_dir)
-                        .unwrap_or(false)
+                    if self.tree_all.get(idx).map(|n| !n.is_dir).unwrap_or(false)
                         && self.is_double_click_tree(idx)
                     {
                         self.preview_selected_file();
@@ -826,7 +922,9 @@ impl App {
             }
             return;
         }
-        if let Some(preview_area) = panes.preview && contains(preview_area, col, row) {
+        if let Some(preview_area) = panes.preview
+            && contains(preview_area, col, row)
+        {
             self.focus = Focus::Preview;
         }
     }
@@ -847,7 +945,8 @@ impl App {
                 if up {
                     self.selected_node = self.selected_node.saturating_sub(1);
                 } else {
-                    self.selected_node = (self.selected_node + 1).min(self.tree_all.len().saturating_sub(1));
+                    self.selected_node =
+                        (self.selected_node + 1).min(self.tree_all.len().saturating_sub(1));
                     self.ensure_lazy_tree_progress();
                 }
             } else if !self.repos.is_empty() {
@@ -855,17 +954,23 @@ impl App {
                 if up {
                     self.selected_repo = self.selected_repo.saturating_sub(1);
                 } else {
-                    self.selected_repo = (self.selected_repo + 1).min(self.repos.len().saturating_sub(1));
+                    self.selected_repo =
+                        (self.selected_repo + 1).min(self.repos.len().saturating_sub(1));
                 }
             }
             return;
         }
-        if let Some(preview_area) = panes.preview && contains(preview_area, col, row) {
+        if let Some(preview_area) = panes.preview
+            && contains(preview_area, col, row)
+        {
             self.focus = Focus::Preview;
             if up {
                 self.scroll_preview_up(3);
             } else {
-                self.scroll_preview_down(3, usize::from(preview_area.height.saturating_sub(2)).max(1));
+                self.scroll_preview_down(
+                    3,
+                    usize::from(preview_area.height.saturating_sub(2)).max(1),
+                );
             }
         }
     }
@@ -874,7 +979,9 @@ impl App {
         let now = Instant::now();
         let is_double = self
             .last_tree_click
-            .map(|(last_idx, last_at)| last_idx == idx && now.duration_since(last_at) <= Duration::from_millis(450))
+            .map(|(last_idx, last_at)| {
+                last_idx == idx && now.duration_since(last_at) <= Duration::from_millis(450)
+            })
             .unwrap_or(false);
         self.last_tree_click = Some((idx, now));
         is_double
@@ -884,7 +991,9 @@ impl App {
         let now = Instant::now();
         let is_double = self
             .last_repo_click
-            .map(|(last_idx, last_at)| last_idx == idx && now.duration_since(last_at) <= Duration::from_millis(450))
+            .map(|(last_idx, last_at)| {
+                last_idx == idx && now.duration_since(last_at) <= Duration::from_millis(450)
+            })
             .unwrap_or(false);
         self.last_repo_click = Some((idx, now));
         is_double
@@ -952,7 +1061,7 @@ fn contains(rect: ratatui::layout::Rect, col: u16, row: u16) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{TREE_LOAD_THRESHOLD, App};
+    use super::{App, TREE_LOAD_THRESHOLD};
 
     #[test]
     fn lazy_tree_progress_advances_limit() {
@@ -987,6 +1096,7 @@ mod tests {
             status: String::new(),
             focus: super::Focus::Tree,
             input_buffer: String::new(),
+            oauth_client_id_input: String::new(),
             clone_path_input: ".".to_string(),
             should_quit: false,
             current_repo: None,

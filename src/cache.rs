@@ -47,8 +47,7 @@ impl PreviewCache {
         }
 
         let content = fs::read_to_string(&file).ok()?;
-        self.memory
-            .insert(key, (Instant::now(), content.clone()));
+        self.memory.insert(key, (Instant::now(), content.clone()));
         Some(content)
     }
 
