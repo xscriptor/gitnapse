@@ -104,6 +104,9 @@ wget -qO- https://raw.githubusercontent.com/xscriptor/gitnapse/main/scripts/inst
 <div id="about-x" align="center">
 <h2>X</h2>
 
+<div>
+<img src="./assets/gitnapse-icon.png" width="50">
+</div>
 <a href="https://dev.xscriptor.com">
   <img src="https://xscriptor.github.io/icons/icons/code/product-design/xsvg/verified-filled.svg" width="24" alt="X Web" />
 </a>
