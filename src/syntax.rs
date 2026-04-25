@@ -2,13 +2,45 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 
 const KEYWORDS: &[&str] = &[
-    "fn", "let", "mut", "pub", "impl", "struct", "enum", "trait", "if", "else", "match", "for",
-    "while", "loop", "return", "use", "mod", "async", "await", "const", "static", "class", "def",
-    "import", "from", "export", "interface", "type", "package", "func", "var",
+    "fn",
+    "let",
+    "mut",
+    "pub",
+    "impl",
+    "struct",
+    "enum",
+    "trait",
+    "if",
+    "else",
+    "match",
+    "for",
+    "while",
+    "loop",
+    "return",
+    "use",
+    "mod",
+    "async",
+    "await",
+    "const",
+    "static",
+    "class",
+    "def",
+    "import",
+    "from",
+    "export",
+    "interface",
+    "type",
+    "package",
+    "func",
+    "var",
 ];
 
 pub fn highlight_content(content: &str, path: &str, max_lines: usize) -> Vec<Line<'static>> {
-    let ext = path.rsplit('.').next().unwrap_or_default().to_ascii_lowercase();
+    let ext = path
+        .rsplit('.')
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
     let comment_prefix = match ext.as_str() {
         "py" | "sh" | "toml" | "yaml" | "yml" | "rb" => "#",
         "rs" | "js" | "ts" | "tsx" | "java" | "c" | "cpp" | "go" | "swift" | "kt" => "//",

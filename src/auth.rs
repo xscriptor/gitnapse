@@ -1,3 +1,5 @@
+use crate::oauth_session;
+use crate::secure_store;
 use anyhow::{Context, Result, anyhow};
 use directories::ProjectDirs;
 use std::fs;
@@ -5,12 +7,17 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 
 const ENV_TOKEN: &str = "GITHUB_TOKEN";
+const ENV_OAUTH_CLIENT_ID: &str = "GITNAPSE_GITHUB_OAUTH_CLIENT_ID";
+const ENV_GITHUB_CLIENT_ID: &str = "GITHUB_CLIENT_ID";
+const DEFAULT_OAUTH_CLIENT_ID: &str = "Iv23liX3yGiGUEYkSlFW";
+const TOKEN_SECRET_KEY: &str = "github_token";
 
 fn token_file() -> Result<PathBuf> {
     let project_dirs = ProjectDirs::from("com", "GitNapse", "GitNapse")
         .ok_or_else(|| anyhow!("Unable to resolve project config directory"))?;
     let dir = project_dirs.config_dir();
-    fs::create_dir_all(dir).with_context(|| format!("Cannot create config dir: {}", dir.display()))?;
+    fs::create_dir_all(dir)
+        .with_context(|| format!("Cannot create config dir: {}", dir.display()))?;
     Ok(dir.join("token"))
 }
 
@@ -22,18 +29,15 @@ pub fn load_token() -> Result<Option<String>> {
         }
     }
 
-    let file = token_file()?;
-    if !file.exists() {
-        return Ok(None);
+    if let Some(session_token) = oauth_session::resolve_access_token()? {
+        let trimmed = session_token.trim().to_string();
+        if !trimmed.is_empty() {
+            return Ok(Some(trimmed));
+        }
     }
 
-    let token = fs::read_to_string(&file)
-        .with_context(|| format!("Cannot read token file: {}", file.display()))?;
-    let token = token.trim().to_owned();
-    if token.is_empty() {
-        return Ok(None);
-    }
-    Ok(Some(token))
+    let file = token_file()?;
+    secure_store::load_secret(TOKEN_SECRET_KEY, &file)
 }
 
 pub fn save_token(token: &str) -> Result<()> {
@@ -43,24 +47,15 @@ pub fn save_token(token: &str) -> Result<()> {
     }
 
     let file = token_file()?;
-    fs::write(&file, format!("{token}\n"))
-        .with_context(|| format!("Cannot write token file: {}", file.display()))?;
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&file, fs::Permissions::from_mode(0o600))
-            .with_context(|| format!("Cannot set secure permissions on {}", file.display()))?;
-    }
+    let _ = secure_store::save_secret(TOKEN_SECRET_KEY, &file, token)?;
 
     Ok(())
 }
 
 pub fn clear_token() -> Result<()> {
     let file = token_file()?;
-    if file.exists() {
-        fs::remove_file(&file).with_context(|| format!("Cannot remove token file: {}", file.display()))?;
-    }
+    secure_store::clear_secret(TOKEN_SECRET_KEY, &file)?;
+    let _ = oauth_session::clear_session();
     Ok(())
 }
 
@@ -86,16 +81,60 @@ pub fn clear_token_cli() -> Result<()> {
 }
 
 pub fn status_cli() -> Result<()> {
-    let env_ok = std::env::var(ENV_TOKEN).ok().filter(|t| !t.trim().is_empty()).is_some();
+    let env_ok = std::env::var(ENV_TOKEN)
+        .ok()
+        .filter(|t| !t.trim().is_empty())
+        .is_some();
+    let oauth_client_id_ok = std::env::var(ENV_OAUTH_CLIENT_ID)
+        .ok()
+        .filter(|t| !t.trim().is_empty())
+        .is_some();
+    let github_client_id_ok = std::env::var(ENV_GITHUB_CLIENT_ID)
+        .ok()
+        .filter(|t| !t.trim().is_empty())
+        .is_some();
     let file = token_file()?;
     let file_ok = file.exists();
+    let oauth_session_ok = oauth_session::load_session()?.is_some();
 
     println!("Authentication status:");
-    println!("- ENV {ENV_TOKEN}: {}", if env_ok { "available" } else { "missing" });
+    println!(
+        "- ENV {ENV_TOKEN}: {}",
+        if env_ok { "available" } else { "missing" }
+    );
     println!(
         "- Stored token file: {} ({})",
         file.display(),
         if file_ok { "present" } else { "missing" }
+    );
+    println!(
+        "- ENV {ENV_OAUTH_CLIENT_ID}: {}",
+        if oauth_client_id_ok {
+            "available"
+        } else {
+            "missing"
+        }
+    );
+    println!(
+        "- ENV {ENV_GITHUB_CLIENT_ID}: {}",
+        if github_client_id_ok {
+            "available"
+        } else {
+            "missing"
+        }
+    );
+    println!("- Built-in OAuth Client ID: {}", DEFAULT_OAUTH_CLIENT_ID);
+    println!(
+        "- OAuth session file: {}",
+        if oauth_session_ok {
+            "present"
+        } else {
+            "missing"
+        }
+    );
+    println!(
+        "- Secret storage mode (preferred): {}",
+        secure_store::preferred_backend_name()
     );
     Ok(())
 }

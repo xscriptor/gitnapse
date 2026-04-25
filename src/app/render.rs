@@ -1,9 +1,9 @@
 use super::{App, Focus, theme};
+use ratatui::Frame;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
-use ratatui::Frame;
 
 #[derive(Debug, Clone, Copy)]
 pub struct PaneAreas {
@@ -90,11 +90,8 @@ pub fn render(frame: &mut Frame<'_>, app: &App) {
         render_repo_list(frame, app, chunks[1]);
     }
 
-    let status = Paragraph::new(app.status.clone()).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title("Status"),
-    );
+    let status = Paragraph::new(app.status.clone())
+        .block(Block::default().borders(Borders::ALL).title("Status"));
     frame.render_widget(status, chunks[2]);
 
     let nav = Paragraph::new(nav_lines)
@@ -108,7 +105,9 @@ pub fn render(frame: &mut Frame<'_>, app: &App) {
         let modal = Paragraph::new(app.clone_path_input.clone())
             .block(
                 Block::default()
-                    .title("Clone Destination Path (Type path, Del clear, Enter confirm, Esc cancel)")
+                    .title(
+                        "Clone Destination Path (Type path, Del clear, Enter confirm, Esc cancel)",
+                    )
                     .borders(Borders::ALL),
             )
             .wrap(Wrap { trim: false });
@@ -122,6 +121,17 @@ pub fn render(frame: &mut Frame<'_>, app: &App) {
         let modal = Paragraph::new(masked).block(
             Block::default()
                 .title("GitHub Token (masked, Enter save, Esc cancel)")
+                .borders(Borders::ALL),
+        );
+        frame.render_widget(modal, area);
+    }
+
+    if app.focus == Focus::OAuthClientIdInput {
+        let area = centered_rect(frame.area(), 75, 20);
+        frame.render_widget(Clear, area);
+        let modal = Paragraph::new(app.oauth_client_id_input.clone()).block(
+            Block::default()
+                .title("OAuth Client ID (optional; Enter start, Del clear, Esc cancel)")
                 .borders(Borders::ALL),
         );
         frame.render_widget(modal, area);
@@ -177,7 +187,10 @@ pub fn render(frame: &mut Frame<'_>, app: &App) {
 fn render_repo_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let viewport_rows = usize::from(area.height.saturating_sub(2)).max(1);
     let max_start = app.repos.len().saturating_sub(viewport_rows);
-    let start = app.selected_repo.saturating_sub(viewport_rows / 2).min(max_start);
+    let start = app
+        .selected_repo
+        .saturating_sub(viewport_rows / 2)
+        .min(max_start);
     let end = (start + viewport_rows).min(app.repos.len());
 
     let items = app.repos[start..end]
@@ -185,7 +198,11 @@ fn render_repo_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
         .enumerate()
         .map(|(index, repo)| {
             let absolute = start + index;
-            let marker = if absolute == app.selected_repo { ">" } else { " " };
+            let marker = if absolute == app.selected_repo {
+                ">"
+            } else {
+                " "
+            };
             let desc = repo.description.as_deref().unwrap_or("No description");
             let lang = repo.language.as_deref().unwrap_or("unknown");
             let line = format!(
@@ -243,7 +260,10 @@ fn render_tree(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let visible = app.visible_tree();
     let viewport_rows = usize::from(area.height.saturating_sub(2)).max(1);
     let max_start = visible.len().saturating_sub(viewport_rows);
-    let start = app.selected_node.saturating_sub(viewport_rows / 2).min(max_start);
+    let start = app
+        .selected_node
+        .saturating_sub(viewport_rows / 2)
+        .min(max_start);
     let end = (start + viewport_rows).min(visible.len());
 
     let items = visible[start..end]
@@ -251,7 +271,11 @@ fn render_tree(frame: &mut Frame<'_>, app: &App, area: Rect) {
         .enumerate()
         .map(|(index, entry)| {
             let absolute = start + index;
-            let marker = if absolute == app.selected_node { ">" } else { " " };
+            let marker = if absolute == app.selected_node {
+                ">"
+            } else {
+                " "
+            };
             let indent = "  ".repeat(entry.depth.min(8));
             let icon = if entry.is_dir { "[D]" } else { "[F]" };
             let text = format!("{marker} {indent}{icon} {}", entry.name);
@@ -283,7 +307,9 @@ fn render_tree(frame: &mut Frame<'_>, app: &App, area: Rect) {
 
 fn render_preview(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let viewport_rows = usize::from(area.height.saturating_sub(2)).max(1);
-    let start = app.preview_scroll.min(app.preview_lines.len().saturating_sub(1));
+    let start = app
+        .preview_scroll
+        .min(app.preview_lines.len().saturating_sub(1));
     let end = (start + viewport_rows).min(app.preview_lines.len());
     let preview_slice = if app.preview_lines.is_empty() {
         vec![Line::from("")]
@@ -293,7 +319,11 @@ fn render_preview(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let title = format!(
         "{} ({}-{} / {})",
         app.preview_title,
-        if app.preview_lines.is_empty() { 0 } else { start + 1 },
+        if app.preview_lines.is_empty() {
+            0
+        } else {
+            start + 1
+        },
         end,
         app.preview_lines.len()
     );

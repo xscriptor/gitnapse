@@ -20,6 +20,8 @@
   <li><code>src/cache.rs</code>: local preview cache with TTL and disk persistence.</li>
   <li><code>src/github.rs</code>: GitHub API client for search/branches/tree/content/auth-user.</li>
   <li><code>src/auth.rs</code>: token loading, secure storage, token CLI subcommands.</li>
+  <li><code>src/oauth.rs</code>: OAuth device-flow login powered by octocrab.</li>
+  <li><code>src/oauth_session.rs</code>: secure OAuth session persistence, expiry metadata, and refresh attempt path.</li>
   <li><code>src/config.rs</code>: persisted account preferences (<code>account.json</code>).</li>
   <li><code>src/models.rs</code>: DTO/domain models for GitHub responses and internal tree nodes.</li>
   <li><code>src/syntax.rs</code>: preview syntax-aware formatting.</li>
@@ -40,6 +42,8 @@
 <ul>
   <li>Preferred source: <code>GITHUB_TOKEN</code>.</li>
   <li>Fallback source: local stored token under user config directory.</li>
+  <li>OAuth device flow is available via <code>gitnapse auth oauth login</code> using octocrab.</li>
+  <li>OAuth session metadata is persisted to support token lifecycle handling and optional refresh.</li>
   <li>UNIX permissions are restricted for token file (<code>0600</code>).</li>
   <li>Token can be updated inside TUI via modal and validated against <code>/user</code>.</li>
 </ul>
@@ -75,6 +79,7 @@
 <h2 id="network-integration" align="center">Network and Integration Notes</h2>
 <ul>
   <li>HTTP layer: <code>reqwest</code> blocking client for deterministic TUI loop behavior.</li>
+  <li>OAuth device flow exchange uses <code>octocrab</code> against <code>https://github.com/login/*</code> routes.</li>
   <li>GitHub endpoints:
     <ul>
       <li><code>/search/repositories</code></li>

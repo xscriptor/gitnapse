@@ -47,6 +47,8 @@
   <li>CLI single-file download command (<code>gitnapse download-file</code>).</li>
   <li>Tree file-name search shortcut and full tree-text view toggle.</li>
   <li>Token management commands and runtime validation against GitHub user endpoint.</li>
+  <li>OAuth device-flow login implemented with <code>octocrab</code> and secure token persistence.</li>
+  <li>OAuth session lifecycle handling added (expiry metadata + optional refresh flow with client secret env variables).</li>
   <li>Full palette-based navigation coloring with contrast-safe foreground.</li>
 </ul>
 

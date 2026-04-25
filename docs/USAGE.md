@@ -6,6 +6,7 @@
   <li><a href="#requirements">Requirements</a></li>
   <li><a href="#cli-table">CLI Command Table</a></li>
   <li><a href="#in-app-controls">In-App Control Table</a></li>
+  <li><a href="#my-private-repos">My Private Repositories</a></li>
   <li><a href="#workflows">Core Workflows</a></li>
   <li><a href="#troubleshooting">Troubleshooting</a></li>
 </ul>
@@ -41,6 +42,12 @@
       <td>Controls search bootstrap and preview cache TTL</td>
     </tr>
     <tr>
+      <td><code>gitnapse run --query "@me"</code></td>
+      <td>List authenticated repositories (including private)</td>
+      <td><code>gitnapse run --query "@me"</code></td>
+      <td>Requires valid login/token; supports optional filter: <code>@me keyword</code></td>
+    </tr>
+    <tr>
       <td><code>gitnapse auth set</code></td>
       <td>Store GitHub token interactively</td>
       <td><code>gitnapse auth set</code></td>
@@ -63,6 +70,12 @@
       <td>Remove stored token</td>
       <td><code>gitnapse auth clear</code></td>
       <td>Does not modify <code>GITHUB_TOKEN</code> env variable</td>
+    </tr>
+    <tr>
+      <td><code>gitnapse auth oauth login ...</code></td>
+      <td>OAuth login (device flow via octocrab)</td>
+      <td><code>gitnapse auth oauth login --client-id YOUR_OAUTH_CLIENT_ID --scope read:user --scope repo</code></td>
+      <td>Starts browser-based device authorization and stores access token securely</td>
     </tr>
     <tr>
       <td><code>gitnapse download-file ...</code></td>
@@ -100,11 +113,26 @@
     <tr><td><code>d</code></td><td>Preview</td><td>Download modal</td><td>Save current previewed file to local path</td></tr>
     <tr><td><code>Del</code></td><td>Path modals</td><td>Clear path input</td><td>Works in clone/download path inputs</td></tr>
     <tr><td><code>t</code></td><td>Global</td><td>Token modal</td><td>Save token from inside the TUI</td></tr>
+    <tr><td><code>o</code></td><td>Global</td><td>OAuth modal</td><td>Client ID is optional; press <code>Enter</code> empty to use default and start device-flow login</td></tr>
     <tr><td><code>q</code></td><td>Global</td><td>Quit</td><td>Exit application</td></tr>
     <tr><td>Mouse left click</td><td>Tree / Preview / Repos</td><td>Focus & select</td><td>Single click selects, double click opens (repo/file)</td></tr>
     <tr><td>Mouse wheel</td><td>Tree / Preview</td><td>Scroll</td><td>Scroll behavior depends on pointer position</td></tr>
   </tbody>
 </table>
+
+<h2 id="my-private-repos" align="center">My Private Repositories</h2>
+<p>
+  GitHub search endpoint does not guarantee full private-repository discovery by username query.
+  To list your own repositories (including private ones), use the authenticated query mode:
+</p>
+<ul>
+  <li>Inside TUI search input (<code>/</code>): <code>@me</code></li>
+  <li>Optional filter: <code>@me rust</code> or <code>me:rust</code></li>
+  <li>CLI start: <code>gitnapse run --query "@me"</code></li>
+</ul>
+<p>
+  This mode requires a valid authenticated session/token and uses your account repository listing API scope.
+</p>
 
 <h2 id="workflows" align="center">Core Workflows</h2>
 
@@ -141,6 +169,10 @@
 <h2 id="troubleshooting" align="center">Troubleshooting</h2>
 <ul>
   <li>If API limits are hit, set a token with <code>gitnapse auth set</code> or export <code>GITHUB_TOKEN</code>.</li>
+  <li>For OAuth device flow, you can provide <code>--client-id</code>; if omitted, GitNapse uses env variables and then built-in default OAuth Client ID.</li>
+  <li>You can also use <code>GITHUB_CLIENT_ID</code> as compatibility fallback for OAuth client ID.</li>
+  <li>If OAuth URL is not clickable in your terminal, GitNapse still tries to auto-open browser; otherwise copy/open the displayed URL manually.</li>
+  <li>To inspect your private repositories from TUI search, use <code>@me</code> (or <code>@me keyword</code> to filter).</li>
   <li>If token is saved but requests fail, run <code>gitnapse auth status</code> and validate token permissions.</li>
   <li>If clone/download fails, verify destination path permissions and filesystem access.</li>
   <li>If no repos appear, refine query terms (owner/org/repo keywords).</li>
