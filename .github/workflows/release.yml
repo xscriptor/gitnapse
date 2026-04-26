@@ -17,6 +17,7 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   # ── Ubuntu → .deb ──────────────────────────────────────────────────────────
@@ -25,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Install cargo-deb
         run: cargo install cargo-deb --locked
       - name: Build
@@ -38,7 +39,7 @@ jobs:
           cp target/debian/gitnapse_${VERSION}_amd64.deb "${asset}"
           echo "ASSET=${asset}" >> "$GITHUB_ENV"
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: asset-linux-ubuntu
           path: ${{ env.ASSET }}
@@ -59,7 +60,7 @@ jobs:
           curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Install cargo-generate-rpm
         run: cargo install cargo-generate-rpm --locked
       - name: Build
@@ -72,7 +73,7 @@ jobs:
           cp target/generate-rpm/gitnapse-${VERSION}-1.x86_64.rpm "${asset}"
           echo "ASSET=${asset}" >> "$GITHUB_ENV"
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: asset-linux-fedora
           path: ${{ env.ASSET }}
@@ -93,7 +94,7 @@ jobs:
           curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Build
         run: cargo build --release --locked
       - name: Package (.pkg.tar.zst)
@@ -116,7 +117,7 @@ EOF
           bsdtar --zstd -cf "${asset}" -C "${PKGDIR}" .
           echo "ASSET=${asset}" >> "$GITHUB_ENV"
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: asset-linux-arch
           path: ${{ env.ASSET }}
@@ -129,7 +130,7 @@ EOF
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Build
         run: cargo build --release --locked
       - name: Package (.exe)
@@ -139,7 +140,7 @@ EOF
           Copy-Item -Path "target/release/gitnapse.exe" -Destination $asset
           "ASSET=$asset" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: asset-windows
           path: ${{ env.ASSET }}
@@ -152,7 +153,7 @@ EOF
     runs-on: macos-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Build
         run: cargo build --release --locked
       - name: Package (.dmg)
@@ -170,7 +171,7 @@ EOF
             "${asset}"
           echo "ASSET=${asset}" >> "$GITHUB_ENV"
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: asset-macos
           path: ${{ env.ASSET }}
@@ -192,9 +193,9 @@ EOF
       id-token: write
     steps:
       - name: Checkout repository metadata
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Download build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: asset-*
           path: dist
@@ -206,6 +207,13 @@ EOF
           app-id: ${{ secrets.RELEASE_GH_APP_ID }}
           private-key: ${{ secrets.RELEASE_GH_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
+      - name: Validate required release auth
+        shell: bash
+        run: |
+          if [ -z "${{ steps.app_token.outputs.token }}" ]; then
+            echo "Missing GitHub App token. Verify RELEASE_GH_APP_ID/RELEASE_GH_APP_PRIVATE_KEY and App installation permissions."
+            exit 1
+          fi
       - name: Show assets
         run: ls -lah dist
       - name: Install cosign
@@ -222,6 +230,6 @@ EOF
           GH_TOKEN: ${{ steps.app_token.outputs.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          gh release view "${RELEASE_TAG}" >/dev/null 2>&1 || \
-          gh release create "${RELEASE_TAG}" --title "${RELEASE_TAG}" --generate-notes
-          gh release upload "${RELEASE_TAG}" dist/* --clobber
+          gh release view "${RELEASE_TAG}" --repo "${GH_REPO}" >/dev/null 2>&1 || \
+          gh release create "${RELEASE_TAG}" --repo "${GH_REPO}" --title "${RELEASE_TAG}" --generate-notes
+          gh release upload "${RELEASE_TAG}" dist/* --repo "${GH_REPO}" --clobber
