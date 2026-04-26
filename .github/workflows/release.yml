@@ -193,7 +193,7 @@ jobs:
       id-token: write
     steps:
       - name: Checkout repository metadata
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
       - name: Download build artifacts
         uses: actions/download-artifact@v5
         with:
@@ -202,18 +202,12 @@ jobs:
           merge-multiple: true
       - name: Generate GitHub App token
         id: app_token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
+        continue-on-error: true
         with:
           app-id: ${{ secrets.RELEASE_GH_APP_ID }}
           private-key: ${{ secrets.RELEASE_GH_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
-      - name: Validate required release auth
-        shell: bash
-        run: |
-          if [ -z "${{ steps.app_token.outputs.token }}" ]; then
-            echo "Missing GitHub App token. Verify RELEASE_GH_APP_ID/RELEASE_GH_APP_PRIVATE_KEY and App installation permissions."
-            exit 1
-          fi
       - name: Show assets
         run: ls -lah dist
       - name: Install cosign
@@ -227,9 +221,24 @@ jobs:
           done
       - name: Create or update release
         env:
-          GH_TOKEN: ${{ steps.app_token.outputs.token }}
           GH_REPO: ${{ github.repository }}
+          GH_APP_TOKEN: ${{ steps.app_token.outputs.token }}
+          GH_WORKFLOW_TOKEN: ${{ github.token }}
         run: |
-          gh release view "${RELEASE_TAG}" --repo "${GH_REPO}" >/dev/null 2>&1 || \
-          gh release create "${RELEASE_TAG}" --repo "${GH_REPO}" --title "${RELEASE_TAG}" --generate-notes
-          gh release upload "${RELEASE_TAG}" dist/* --repo "${GH_REPO}" --clobber
+          SELECTED_TOKEN="${GH_APP_TOKEN}"
+          TOKEN_SOURCE="GitHub App"
+          if [ -z "${SELECTED_TOKEN}" ]; then
+            SELECTED_TOKEN="${GH_WORKFLOW_TOKEN}"
+            TOKEN_SOURCE="Workflow GITHUB_TOKEN"
+          fi
+
+          # If App token exists but has insufficient permissions (403), fallback to GITHUB_TOKEN.
+          if ! GH_TOKEN="${SELECTED_TOKEN}" gh api "repos/${GH_REPO}/releases?per_page=1" >/dev/null 2>&1; then
+            SELECTED_TOKEN="${GH_WORKFLOW_TOKEN}"
+            TOKEN_SOURCE="Workflow GITHUB_TOKEN (fallback)"
+          fi
+
+          echo "Publishing release using: ${TOKEN_SOURCE}"
+          GH_TOKEN="${SELECTED_TOKEN}" gh release view "${RELEASE_TAG}" --repo "${GH_REPO}" >/dev/null 2>&1 || \
+          GH_TOKEN="${SELECTED_TOKEN}" gh release create "${RELEASE_TAG}" --repo "${GH_REPO}" --title "${RELEASE_TAG}" --generate-notes
+          GH_TOKEN="${SELECTED_TOKEN}" gh release upload "${RELEASE_TAG}" dist/* --repo "${GH_REPO}" --clobber
