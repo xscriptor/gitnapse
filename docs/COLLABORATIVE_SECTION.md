@@ -5,7 +5,9 @@
 <ul>
   <li><a href="#branch-policy">Branch Policy</a></li>
   <li><a href="#pr-flow">Pull Request Flow</a></li>
+  <li><a href="#daily-checklist">Daily Development Checklist</a></li>
   <li><a href="#release-flow">Release Publishing Flow</a></li>
+  <li><a href="#release-checklist">Release Checklist</a></li>
   <li><a href="#maintainer-checklist">Maintainer Checklist</a></li>
 </ul>
 
@@ -31,11 +33,21 @@
 git pull --ff-only
 git checkout -b feat/short-description
 # code changes
-cargo check
+cargo fmt --all
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-targets --all-features
 git add .
 git commit -m "feat: short description"
 git push -u origin feat/short-description
 </code></pre>
+
+<h2 id="daily-checklist" align="center">Daily Development Checklist</h2>
+<ol>
+  <li>Start from updated <code>main</code> and create a topic branch.</li>
+  <li>Implement changes and update documentation when user behavior changes.</li>
+  <li>Run local quality checks (<code>fmt</code>, <code>clippy</code>, <code>test</code>).</li>
+  <li>Open PR to <code>main</code> and merge only after checks are green.</li>
+</ol>
 
 <h2 id="release-flow" align="center">Release Publishing Flow</h2>
 <p>
@@ -52,9 +64,29 @@ git push -u origin feat/short-description
 <p><strong>Release command sequence:</strong></p>
 <pre><code class="language-bash">git checkout main
 git pull --ff-only
+
+# if Cargo.toml version/dependencies changed
+cargo check
+git add Cargo.toml Cargo.lock
+git commit -m "chore: sync manifest and lockfile"
+
 git tag -a v1.2.0 -m "GitNapse v1.2.0"
 git push origin v1.2.0
 </code></pre>
+
+<h2 id="release-checklist" align="center">Release Checklist</h2>
+<ol>
+  <li>Ensure all required PRs are merged into <code>main</code>.</li>
+  <li>Ensure <code>Cargo.toml</code> and <code>Cargo.lock</code> are synchronized before tagging.</li>
+  <li>Create and push the annotated version tag from <code>main</code>.</li>
+  <li>Verify GitHub Actions release jobs for Ubuntu/Fedora/Arch/Windows/macOS.</li>
+  <li>Verify uploaded assets and signatures in the GitHub Release page.</li>
+</ol>
+<p>
+  If GitHub App release permissions are insufficient, the workflow retries publishing with workflow
+  <code>GITHUB_TOKEN</code>. Keep repository setting
+  <strong>Actions -&gt; Workflow permissions -&gt; Read and write permissions</strong> enabled.
+</p>
 
 <p><strong>Manual rebuild of an existing release tag:</strong></p>
 <ul>
@@ -66,7 +98,8 @@ git push origin v1.2.0
 <h2 id="maintainer-checklist" align="center">Maintainer Checklist</h2>
 <ul>
   <li>Confirm PR merged into <code>main</code> and CI green.</li>
-  <li>Confirm docs are aligned with user-visible changes.</li>
-  <li>Create semantic version tag from <code>main</code>.</li>
+  <li>Confirm docs and changelog are aligned with user-visible changes.</li>
+  <li>Confirm release permissions are configured (GitHub App secrets and workflow write permissions).</li>
+  <li>Create semantic version tag from <code>main</code> only after lockfile sync checks.</li>
   <li>Validate release assets for all target platforms after workflow completion.</li>
 </ul>

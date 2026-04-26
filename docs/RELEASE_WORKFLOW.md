@@ -6,6 +6,7 @@
   <li><a href="#overview">Overview</a></li>
   <li><a href="#triggers">Workflow Triggers</a></li>
   <li><a href="#artifacts">Build Artifacts</a></li>
+  <li><a href="#daily-commands">Daily Development Commands</a></li>
   <li><a href="#commands">Versioning Commands</a></li>
   <li><a href="#manual-run">Manual Release Run</a></li>
   <li><a href="#secrets-and-signing">Secrets And Signing</a></li>
@@ -27,17 +28,39 @@
 
 <h2 id="artifacts" align="center">Build Artifacts</h2>
 <ul>
-  <li><code>gitnapse-&lt;tag&gt;-linux-ubuntu-x86_64.tar.gz</code></li>
-  <li><code>gitnapse-&lt;tag&gt;-linux-arch-x86_64.tar.gz</code></li>
-  <li><code>gitnapse-&lt;tag&gt;-linux-fedora-x86_64.tar.gz</code></li>
-  <li><code>gitnapse-&lt;tag&gt;-windows-x86_64.zip</code></li>
-  <li><code>gitnapse-&lt;tag&gt;-macos-&lt;arch&gt;.tar.gz</code></li>
+  <li><code>gitnapse-&lt;tag&gt;-linux-ubuntu-amd64.deb</code></li>
+  <li><code>gitnapse-&lt;tag&gt;-linux-fedora-x86_64.rpm</code></li>
+  <li><code>gitnapse-&lt;tag&gt;-linux-arch-x86_64.pkg.tar.zst</code></li>
+  <li><code>gitnapse-&lt;tag&gt;-windows-x86_64.exe</code></li>
+  <li><code>gitnapse-&lt;tag&gt;-macos-&lt;arch&gt;.dmg</code></li>
 </ul>
+
+<h2 id="daily-commands" align="center">Daily Development Commands</h2>
+<p>Use this flow for regular feature/fix work before release tags:</p>
+<pre><code class="language-bash">git checkout main
+git pull --ff-only
+git checkout -b feature/my-change
+
+# build quality gates
+cargo fmt --all
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-targets --all-features
+
+git add .
+git commit -m "feat: my change"
+git push -u origin feature/my-change
+</code></pre>
 
 <h2 id="commands" align="center">Versioning Commands</h2>
 <p>Create and publish a new version tag:</p>
 <pre><code class="language-bash">git checkout main
 git pull --ff-only
+
+# if Cargo.toml changed (version/dependencies), sync lockfile first
+cargo check
+git add Cargo.toml Cargo.lock
+git commit -m "chore: sync Cargo manifest and lockfile"
+
 git tag -a v1.0.0 -m "GitNapse v1.0.0"
 git push origin v1.0.0
 </code></pre>
@@ -55,10 +78,11 @@ git push origin v1.0.0
 
 <h2 id="secrets-and-signing" align="center">Secrets And Signing</h2>
 <ul>
-  <li>Release publishing is authenticated with a GitHub App token generated from repository secrets.</li>
+  <li>Release publishing first attempts GitHub App auth, then falls back to workflow <code>GITHUB_TOKEN</code> if App auth cannot publish release assets.</li>
   <li>Required repository secrets:</li>
   <li><code>RELEASE_GH_APP_ID</code> - GitHub App ID.</li>
   <li><code>RELEASE_GH_APP_PRIVATE_KEY</code> - GitHub App private key PEM content (multi-line).</li>
+  <li>Repository setting required for fallback: <strong>Settings -&gt; Actions -&gt; Workflow permissions -&gt; Read and write permissions</strong>.</li>
   <li>Assets are signed in workflow using keyless <code>cosign</code> with GitHub OIDC (<code>id-token: write</code>).</li>
   <li>Signature files (<code>.sig</code>) and certificates (<code>.pem</code>) are uploaded alongside each asset.</li>
 </ul>
