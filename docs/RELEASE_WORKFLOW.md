@@ -27,17 +27,21 @@
 
 <h2 id="artifacts" align="center">Build Artifacts</h2>
 <ul>
-  <li><code>gitnapse-&lt;tag&gt;-linux-ubuntu-x86_64.tar.gz</code></li>
-  <li><code>gitnapse-&lt;tag&gt;-linux-arch-x86_64.tar.gz</code></li>
-  <li><code>gitnapse-&lt;tag&gt;-linux-fedora-x86_64.tar.gz</code></li>
-  <li><code>gitnapse-&lt;tag&gt;-windows-x86_64.zip</code></li>
-  <li><code>gitnapse-&lt;tag&gt;-macos-&lt;arch&gt;.tar.gz</code></li>
+  <li><code>gitnapse-&lt;tag&gt;-linux-ubuntu-amd64.deb</code></li>
+  <li><code>gitnapse-&lt;tag&gt;-linux-arch-x86_64.pkg.tar.zst</code></li>
+  <li><code>gitnapse-&lt;tag&gt;-linux-fedora-x86_64.rpm</code></li>
+  <li><code>gitnapse-&lt;tag&gt;-windows-x86_64.exe</code></li>
+  <li><code>gitnapse-&lt;tag&gt;-macos-&lt;arch&gt;.dmg</code></li>
 </ul>
 
 <h2 id="commands" align="center">Versioning Commands</h2>
 <p>Create and publish a new version tag:</p>
 <pre><code class="language-bash">git checkout main
 git pull --ff-only
+# if Cargo.toml version changed, refresh lockfile and commit it
+cargo check
+git add Cargo.lock
+git commit -m "chore: sync Cargo.lock"
 git tag -a v1.0.0 -m "GitNapse v1.0.0"
 git push origin v1.0.0
 </code></pre>
