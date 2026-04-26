@@ -106,12 +106,12 @@ jobs:
 
           # Generate .PKGINFO metadata file (must not be a directory)
           BINSIZE="$(du -sb "${PKGDIR}/usr/bin/gitnapse" | cut -f1)"
-          cat > "${PKGDIR}/.PKGINFO" << EOF
-pkgname = gitnapse
-pkgver = ${VERSION}-1
-arch = x86_64
-size = ${BINSIZE}
-EOF
+          {
+            echo "pkgname = gitnapse"
+            echo "pkgver = ${VERSION}-1"
+            echo "arch = x86_64"
+            echo "size = ${BINSIZE}"
+          } > "${PKGDIR}/.PKGINFO"
 
           asset="gitnapse-${RELEASE_TAG}-linux-arch-x86_64.pkg.tar.zst"
           bsdtar --zstd -cf "${asset}" -C "${PKGDIR}" .
