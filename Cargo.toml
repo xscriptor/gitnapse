@@ -2,6 +2,9 @@
 name = "gitnapse"
 version = "0.1.0"
 edition = "2024"
+description = "A TUI tool to browse and manage your GitHub repositories"
+license = "MIT"
+authors = ["xscriptor"]
 
 [dependencies]
 anyhow = "1.0"
@@ -29,3 +32,15 @@ webbrowser = "1.0"
 mockito = "1.7"
 serial_test = "3.2"
 tempfile = "3.20"
+
+[package.metadata.deb]
+section = "utils"
+priority = "optional"
+assets = [
+  ["target/release/gitnapse", "usr/bin/", "755"],
+]
+
+[package.metadata.generate-rpm]
+assets = [
+  { source = "target/release/gitnapse", dest = "/usr/bin/gitnapse", mode = "755" },
+]

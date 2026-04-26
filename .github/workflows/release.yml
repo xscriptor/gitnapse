@@ -17,59 +17,35 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
+  # ── Ubuntu → .deb ──────────────────────────────────────────────────────────
   build-linux-ubuntu:
     name: Build Linux (Ubuntu)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
+      - name: Install cargo-deb
+        run: cargo install cargo-deb --locked
       - name: Build
         run: cargo build --release --locked
-      - name: Package
+      - name: Package (.deb)
         run: |
-          asset="gitnapse-${RELEASE_TAG}-linux-ubuntu-x86_64.tar.gz"
-          tar -C target/release -czf "${asset}" gitnapse
+          VERSION="${RELEASE_TAG#v}"
+          cargo deb --no-build --deb-version "${VERSION}"
+          asset="gitnapse-${RELEASE_TAG}-linux-ubuntu-amd64.deb"
+          cp target/debian/gitnapse_${VERSION}_amd64.deb "${asset}"
           echo "ASSET=${asset}" >> "$GITHUB_ENV"
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: asset-linux-ubuntu
           path: ${{ env.ASSET }}
           if-no-files-found: error
           retention-days: 7
 
-  build-linux-arch:
-    name: Build Linux (Arch)
-    runs-on: ubuntu-latest
-    container:
-      image: archlinux:latest
-    steps:
-      - name: Install build dependencies
-        run: pacman -Syu --noconfirm --needed base-devel curl ca-certificates git openssl pkgconf
-      - name: Install Rust
-        run: |
-          curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Build
-        run: cargo build --release --locked
-      - name: Package
-        run: |
-          asset="gitnapse-${RELEASE_TAG}-linux-arch-x86_64.tar.gz"
-          tar -C target/release -czf "${asset}" gitnapse
-          echo "ASSET=${asset}" >> "$GITHUB_ENV"
-      - name: Upload artifact
-        uses: actions/upload-artifact@v5
-        with:
-          name: asset-linux-arch
-          path: ${{ env.ASSET }}
-          if-no-files-found: error
-          retention-days: 7
-
+  # ── Fedora → .rpm ──────────────────────────────────────────────────────────
   build-linux-fedora:
     name: Build Linux (Fedora)
     runs-on: ubuntu-latest
@@ -77,96 +53,155 @@ jobs:
       image: fedora:latest
     steps:
       - name: Install build dependencies
-        run: dnf -y install curl gcc gcc-c++ make pkgconf-pkg-config openssl-devel ca-certificates git tar gzip
+        run: dnf -y install curl gcc gcc-c++ make pkgconf-pkg-config openssl-devel ca-certificates git tar gzip rpm-build
       - name: Install Rust
         run: |
           curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
+      - name: Install cargo-generate-rpm
+        run: cargo install cargo-generate-rpm --locked
       - name: Build
         run: cargo build --release --locked
-      - name: Package
+      - name: Package (.rpm)
         run: |
-          asset="gitnapse-${RELEASE_TAG}-linux-fedora-x86_64.tar.gz"
-          tar -C target/release -czf "${asset}" gitnapse
+          VERSION="${RELEASE_TAG#v}"
+          cargo generate-rpm --set-metadata="version='${VERSION}'"
+          asset="gitnapse-${RELEASE_TAG}-linux-fedora-x86_64.rpm"
+          cp target/generate-rpm/gitnapse-${VERSION}-1.x86_64.rpm "${asset}"
           echo "ASSET=${asset}" >> "$GITHUB_ENV"
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: asset-linux-fedora
           path: ${{ env.ASSET }}
           if-no-files-found: error
           retention-days: 7
 
+  # ── Arch Linux → .pkg.tar.zst ──────────────────────────────────────────────
+  build-linux-arch:
+    name: Build Linux (Arch)
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+    steps:
+      - name: Install build dependencies
+        run: pacman -Syu --noconfirm --needed base-devel curl ca-certificates git openssl pkgconf fakeroot binutils
+      - name: Install Rust
+        run: |
+          curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build
+        run: cargo build --release --locked
+      - name: Package (.pkg.tar.zst)
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          PKGDIR="gitnapse-pkg"
+          mkdir -p "${PKGDIR}/usr/bin"
+          cp target/release/gitnapse "${PKGDIR}/usr/bin/gitnapse"
+
+          # Generate a minimal PKGBUILD-compatible package using bsdtar/makepkg structure
+          mkdir -p "${PKGDIR}/.PKGINFO"
+          cat > "${PKGDIR}/.PKGINFO" << EOF
+          pkgname = gitnapse
+          pkgver = ${VERSION}-1
+          arch = x86_64
+          size = $(du -sb "${PKGDIR}/usr/bin/gitnapse" | cut -f1)
+          EOF
+
+          asset="gitnapse-${RELEASE_TAG}-linux-arch-x86_64.pkg.tar.zst"
+          bsdtar --zstd -cf "${asset}" -C "${PKGDIR}" .
+          echo "ASSET=${asset}" >> "$GITHUB_ENV"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: asset-linux-arch
+          path: ${{ env.ASSET }}
+          if-no-files-found: error
+          retention-days: 7
+
+  # ── Windows → .exe ────────────────────────────────────────────────────────
   build-windows:
     name: Build Windows
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
       - name: Build
         run: cargo build --release --locked
-      - name: Package
+      - name: Package (.exe)
         shell: pwsh
         run: |
-          $asset = "gitnapse-$env:RELEASE_TAG-windows-x86_64.zip"
-          Compress-Archive -Path "target/release/gitnapse.exe" -DestinationPath $asset -Force
+          $asset = "gitnapse-$env:RELEASE_TAG-windows-x86_64.exe"
+          Copy-Item -Path "target/release/gitnapse.exe" -Destination $asset
           "ASSET=$asset" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: asset-windows
           path: ${{ env.ASSET }}
           if-no-files-found: error
           retention-days: 7
 
+  # ── macOS → .dmg ───────────────────────────────────────────────────────────
   build-macos:
     name: Build macOS
     runs-on: macos-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
       - name: Build
         run: cargo build --release --locked
-      - name: Package
+      - name: Package (.dmg)
         run: |
           arch="$(uname -m)"
-          asset="gitnapse-${RELEASE_TAG}-macos-${arch}.tar.gz"
-          tar -C target/release -czf "${asset}" gitnapse
+          APP_DIR="gitnapse-dmg-staging"
+          mkdir -p "${APP_DIR}"
+          cp target/release/gitnapse "${APP_DIR}/gitnapse"
+
+          asset="gitnapse-${RELEASE_TAG}-macos-${arch}.dmg"
+          hdiutil create \
+            -volname "gitnapse ${RELEASE_TAG}" \
+            -srcfolder "${APP_DIR}" \
+            -ov -format UDZO \
+            "${asset}"
           echo "ASSET=${asset}" >> "$GITHUB_ENV"
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v4
         with:
           name: asset-macos
           path: ${{ env.ASSET }}
           if-no-files-found: error
           retention-days: 7
 
+  # ── Publish ────────────────────────────────────────────────────────────────
   publish-release:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
     needs:
       - build-linux-ubuntu
-      - build-linux-arch
       - build-linux-fedora
+      - build-linux-arch
       - build-windows
       - build-macos
     permissions:
       contents: write
       id-token: write
     steps:
+      - name: Checkout repository metadata
+        uses: actions/checkout@v4
       - name: Download build artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v4
         with:
           pattern: asset-*
           path: dist
           merge-multiple: true
-      - name: Checkout repository metadata
-        uses: actions/checkout@v6
       - name: Generate GitHub App token
         id: app_token
-        uses: actions/create-github-app-token@v3
+        uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ secrets.RELEASE_GH_APP_ID }}
           private-key: ${{ secrets.RELEASE_GH_APP_PRIVATE_KEY }}
