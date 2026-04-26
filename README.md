@@ -108,6 +108,7 @@ wget -qO- https://raw.githubusercontent.com/xscriptor/gitnapse/main/scripts/inst
   <li><a href="./docs/RELEASE_WORKFLOW.md"><code>RELEASE_WORKFLOW.md</code></a> - release build/publish workflow and versioning commands</li>
   <li><a href="./docs/USAGE.md"><code>USAGE.md</code></a> - full command and in-app usage guide</li>
   <li><a href="./docs/ARCHITECTURE.md"><code>ARCHITECTURE.md</code></a> - technical architecture details</li>
+  <li><a href="./CHANGELOG.md"><code>CHANGELOG.md</code></a> - consolidated implementation history by release</li>
   <li><a href="./docs/IMPLEMENTATION_LOG.md"><code>IMPLEMENTATION_LOG.md</code></a> - implementation materialization log</li>
   <li><a href="./docs/tests/README.md"><code>docs/tests/README.md</code></a> - test and security audit documentation index</li>
   <li><a href="./SECURITY.md"><code>SECURITY.md</code></a> - vulnerability reporting and response policy</li>
