@@ -225,20 +225,26 @@ jobs:
           GH_APP_TOKEN: ${{ steps.app_token.outputs.token }}
           GH_WORKFLOW_TOKEN: ${{ github.token }}
         run: |
-          SELECTED_TOKEN="${GH_APP_TOKEN}"
-          TOKEN_SOURCE="GitHub App"
-          if [ -z "${SELECTED_TOKEN}" ]; then
-            SELECTED_TOKEN="${GH_WORKFLOW_TOKEN}"
-            TOKEN_SOURCE="Workflow GITHUB_TOKEN"
+          publish_with_token() {
+            local token="$1"
+            GH_TOKEN="${token}" gh release view "${RELEASE_TAG}" --repo "${GH_REPO}" >/dev/null 2>&1 || \
+            GH_TOKEN="${token}" gh release create "${RELEASE_TAG}" --repo "${GH_REPO}" --title "${RELEASE_TAG}" --generate-notes
+            GH_TOKEN="${token}" gh release upload "${RELEASE_TAG}" dist/* --repo "${GH_REPO}" --clobber
+          }
+
+          # Prefer GitHub App token, but always fallback to workflow GITHUB_TOKEN if publish fails.
+          if [ -n "${GH_APP_TOKEN}" ]; then
+            echo "Publishing release using: GitHub App"
+            if publish_with_token "${GH_APP_TOKEN}"; then
+              exit 0
+            fi
+            echo "GitHub App token failed to publish release. Retrying with workflow GITHUB_TOKEN..."
           fi
 
-          # If App token exists but has insufficient permissions (403), fallback to GITHUB_TOKEN.
-          if ! GH_TOKEN="${SELECTED_TOKEN}" gh api "repos/${GH_REPO}/releases?per_page=1" >/dev/null 2>&1; then
-            SELECTED_TOKEN="${GH_WORKFLOW_TOKEN}"
-            TOKEN_SOURCE="Workflow GITHUB_TOKEN (fallback)"
+          if [ -z "${GH_WORKFLOW_TOKEN}" ]; then
+            echo "Workflow GITHUB_TOKEN is empty. Cannot publish release."
+            exit 1
           fi
 
-          echo "Publishing release using: ${TOKEN_SOURCE}"
-          GH_TOKEN="${SELECTED_TOKEN}" gh release view "${RELEASE_TAG}" --repo "${GH_REPO}" >/dev/null 2>&1 || \
-          GH_TOKEN="${SELECTED_TOKEN}" gh release create "${RELEASE_TAG}" --repo "${GH_REPO}" --title "${RELEASE_TAG}" --generate-notes
-          GH_TOKEN="${SELECTED_TOKEN}" gh release upload "${RELEASE_TAG}" dist/* --repo "${GH_REPO}" --clobber
+          echo "Publishing release using: Workflow GITHUB_TOKEN"
+          publish_with_token "${GH_WORKFLOW_TOKEN}"
