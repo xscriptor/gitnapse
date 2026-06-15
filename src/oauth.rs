@@ -41,9 +41,11 @@ fn terminal_hyperlink(url: &str) -> String {
 }
 
 fn ensure_rustls_crypto_provider() {
-    // Some environments cannot auto-select rustls provider at runtime.
-    let _ =
-        rustls::crypto::CryptoProvider::install_default(rustls::crypto::ring::default_provider());
+    if rustls::crypto::CryptoProvider::install_default(rustls::crypto::ring::default_provider())
+        .is_err()
+    {
+        eprintln!("Warning: could not install rustls crypto provider (may already be set)");
+    }
 }
 
 fn try_open_browser(url: &str) -> bool {

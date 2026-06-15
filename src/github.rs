@@ -119,16 +119,14 @@ impl GitHubClient {
                 return true;
             }
 
-            let haystack = format!(
-                "{} {} {}",
-                repo.full_name.to_lowercase(),
-                repo.name.to_lowercase(),
-                repo.description
-                    .as_ref()
-                    .map(|desc| desc.to_lowercase())
-                    .unwrap_or_default()
-            );
-            query.text_terms.iter().all(|term| haystack.contains(term))
+            let full_name_lower = repo.full_name.to_lowercase();
+            let name_lower = repo.name.to_lowercase();
+            let desc_lower = repo.description.as_ref().map(|d| d.to_lowercase());
+            query.text_terms.iter().all(|term| {
+                full_name_lower.contains(term)
+                    || name_lower.contains(term)
+                    || desc_lower.as_deref().is_some_and(|d| d.contains(term))
+            })
         });
 
         Ok(repos)
@@ -244,9 +242,9 @@ impl GitHubClient {
             .map(|entry| {
                 let name = entry
                     .path
-                    .rsplit('/')
-                    .next()
-                    .unwrap_or(entry.path.as_str())
+                    .rsplit_once('/')
+                    .map(|(_, name)| name)
+                    .unwrap_or(&entry.path)
                     .to_string();
                 let depth = entry.path.matches('/').count();
                 RepoNode {

@@ -805,7 +805,7 @@ impl App {
                             .tree_all
                             .iter()
                             .map(|node| {
-                                let indent = "  ".repeat(node.depth.min(10));
+                                let indent = render::INDENTS.get(node.depth.min(10)).copied().unwrap_or("                    ");
                                 let icon = if node.is_dir { "[D]" } else { "[F]" };
                                 Line::from(format!("{indent}{icon} {}", node.path))
                             })

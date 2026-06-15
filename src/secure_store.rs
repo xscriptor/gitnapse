@@ -12,9 +12,7 @@ pub enum SecretBackend {
 
 fn is_wsl() -> bool {
     if std::env::var("WSL_DISTRO_NAME")
-        .ok()
-        .filter(|v| !v.trim().is_empty())
-        .is_some()
+        .is_ok_and(|v| !v.trim().is_empty())
     {
         return true;
     }

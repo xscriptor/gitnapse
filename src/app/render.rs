@@ -256,6 +256,11 @@ fn render_repo_view(frame: &mut Frame<'_>, app: &App, area: Rect) {
     }
 }
 
+pub(crate) const INDENTS: &[&str] = &[
+    "", "  ", "    ", "      ", "        ", "          ", "            ",
+    "              ", "                ",
+];
+
 fn render_tree(frame: &mut Frame<'_>, app: &App, area: Rect) {
     let visible = app.visible_tree();
     let viewport_rows = usize::from(area.height.saturating_sub(2)).max(1);
@@ -276,7 +281,7 @@ fn render_tree(frame: &mut Frame<'_>, app: &App, area: Rect) {
             } else {
                 " "
             };
-            let indent = "  ".repeat(entry.depth.min(8));
+            let indent = INDENTS[entry.depth.min(8)];
             let icon = if entry.is_dir { "[D]" } else { "[F]" };
             let text = format!("{marker} {indent}{icon} {}", entry.name);
             let style = if absolute == app.selected_node {
