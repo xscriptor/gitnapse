@@ -22,11 +22,15 @@ impl PreviewCache {
     /// # Errors
     /// Returns an error if the cache directory cannot be created.
     pub fn new(ttl_secs: u64) -> Result<Self, CacheError> {
-        let project_dirs = ProjectDirs::from("com", "GitNapse", "GitNapse")
-            .ok_or(CacheError::NoCacheDir)?;
+        let project_dirs =
+            ProjectDirs::from("com", "GitNapse", "GitNapse").ok_or(CacheError::NoCacheDir)?;
         let dir = project_dirs.cache_dir().join("preview");
-        fs::create_dir_all(&dir)
-            .map_err(|e| CacheError::Other(format!("Cannot create preview cache directory: {}: {e}", dir.display())))?;
+        fs::create_dir_all(&dir).map_err(|e| {
+            CacheError::Other(format!(
+                "Cannot create preview cache directory: {}: {e}",
+                dir.display()
+            ))
+        })?;
         Ok(Self {
             dir,
             ttl: Duration::from_secs(ttl_secs.max(1)),
@@ -70,7 +74,14 @@ impl PreviewCache {
     /// Both the in-memory cache and the on-disk cache are updated. Any existing
     /// entry for the same key is overwritten. An optional ETag can be provided
     /// for conditional requests.
-    pub fn put(&mut self, repo: &str, branch: &str, path: &str, content: &[u8], etag: Option<&str>) {
+    pub fn put(
+        &mut self,
+        repo: &str,
+        branch: &str,
+        path: &str,
+        content: &[u8],
+        etag: Option<&str>,
+    ) {
         let key = cache_key(repo, branch, path);
         let file = self.dir.join(format!("{key}.cache"));
         let _ = fs::write(&file, content);

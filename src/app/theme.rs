@@ -36,12 +36,13 @@ pub fn load_theme_by_name(name: &str) -> ThemeConfig {
     };
     let path = dir.join(format!("{name}.jsonc"));
     if path.exists()
-        && let Ok(raw) = std::fs::read_to_string(&path) {
-            let cleaned = strip_jsonc_comments(&raw);
-            if let Ok(cfg) = serde_json::from_str(&cleaned) {
-                return cfg;
-            }
+        && let Ok(raw) = std::fs::read_to_string(&path)
+    {
+        let cleaned = strip_jsonc_comments(&raw);
+        if let Ok(cfg) = serde_json::from_str(&cleaned) {
+            return cfg;
         }
+    }
     ThemeConfig::default()
 }
 

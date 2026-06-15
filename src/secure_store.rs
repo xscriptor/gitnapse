@@ -15,9 +15,7 @@ pub enum SecretBackend {
 }
 
 fn is_wsl() -> bool {
-    if std::env::var("WSL_DISTRO_NAME")
-        .is_ok_and(|v| !v.trim().is_empty())
-    {
+    if std::env::var("WSL_DISTRO_NAME").is_ok_and(|v| !v.trim().is_empty()) {
         return true;
     }
     #[cfg(target_os = "linux")]
@@ -106,8 +104,9 @@ fn file_read(path: &Path) -> Result<Option<String>, AuthError> {
     if !path.exists() {
         return Ok(None);
     }
-    let value = fs::read_to_string(path)
-        .map_err(|e| AuthError::Other(format!("Cannot read secret file '{}': {e}", path.display())))?;
+    let value = fs::read_to_string(path).map_err(|e| {
+        AuthError::Other(format!("Cannot read secret file '{}': {e}", path.display()))
+    })?;
     let trimmed = value.trim().to_string();
     if trimmed.is_empty() {
         return Ok(None);
@@ -117,24 +116,40 @@ fn file_read(path: &Path) -> Result<Option<String>, AuthError> {
 
 fn file_write(path: &Path, value: &str) -> Result<(), AuthError> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| AuthError::Other(format!("Cannot create secret directory '{}': {e}", parent.display())))?;
+        fs::create_dir_all(parent).map_err(|e| {
+            AuthError::Other(format!(
+                "Cannot create secret directory '{}': {e}",
+                parent.display()
+            ))
+        })?;
     }
-    fs::write(path, format!("{value}\n"))
-        .map_err(|e| AuthError::Other(format!("Cannot write secret file '{}': {e}", path.display())))?;
+    fs::write(path, format!("{value}\n")).map_err(|e| {
+        AuthError::Other(format!(
+            "Cannot write secret file '{}': {e}",
+            path.display()
+        ))
+    })?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(path, fs::Permissions::from_mode(0o600))
-            .map_err(|e| AuthError::Other(format!("Cannot set permissions on '{}': {e}", path.display())))?;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o600)).map_err(|e| {
+            AuthError::Other(format!(
+                "Cannot set permissions on '{}': {e}",
+                path.display()
+            ))
+        })?;
     }
     Ok(())
 }
 
 fn file_delete(path: &Path) -> Result<(), AuthError> {
     if path.exists() {
-        fs::remove_file(path)
-            .map_err(|e| AuthError::Other(format!("Cannot remove secret file '{}': {e}", path.display())))?;
+        fs::remove_file(path).map_err(|e| {
+            AuthError::Other(format!(
+                "Cannot remove secret file '{}': {e}",
+                path.display()
+            ))
+        })?;
     }
     Ok(())
 }
@@ -147,7 +162,11 @@ fn file_delete(path: &Path) -> Result<(), AuthError> {
 ///
 /// # Errors
 /// Returns an error if both the keyring and the fallback file write fail.
-pub fn save_secret(secret_key: &str, fallback_file: &Path, value: &str) -> Result<SecretBackend, AuthError> {
+pub fn save_secret(
+    secret_key: &str,
+    fallback_file: &Path,
+    value: &str,
+) -> Result<SecretBackend, AuthError> {
     if let Some(result) = keyring_set(secret_key, value)
         && result.is_ok()
     {

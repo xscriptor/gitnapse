@@ -89,5 +89,3 @@ pub enum OAuthError {
     #[error("{0}")]
     Other(String),
 }
-
-

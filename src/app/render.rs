@@ -1,10 +1,10 @@
 use super::{App, Focus, theme};
 use ratatui::Frame;
-use secrecy::ExposeSecret;
 use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
+use secrecy::ExposeSecret;
 
 #[derive(Debug, Clone, Copy)]
 pub struct PaneAreas {
@@ -197,14 +197,17 @@ pub fn render(frame: &mut Frame<'_>, app: &mut App) {
             if list.is_empty() {
                 vec![ListItem::new(Line::from(" No matching commands"))]
             } else {
-                list.iter().enumerate().map(|(i, cmd)| {
-                    let style = if i == app.command_cursor {
-                        theme::selection_style(i)
-                    } else {
-                        Style::default()
-                    };
-                    ListItem::new(Line::from(Span::styled(format!(" {}", cmd), style)))
-                }).collect()
+                list.iter()
+                    .enumerate()
+                    .map(|(i, cmd)| {
+                        let style = if i == app.command_cursor {
+                            theme::selection_style(i)
+                        } else {
+                            Style::default()
+                        };
+                        ListItem::new(Line::from(Span::styled(format!(" {}", cmd), style)))
+                    })
+                    .collect()
             }
         };
 
@@ -213,8 +216,11 @@ pub fn render(frame: &mut Frame<'_>, app: &mut App) {
             .constraints([Constraint::Length(3), Constraint::Min(5)])
             .split(area);
 
-        let search_input = Paragraph::new(app.command_input.clone())
-            .block(Block::default().borders(Borders::ALL).title("Command Palette (Ctrl+P, type to filter, Enter to execute)"));
+        let search_input = Paragraph::new(app.command_input.clone()).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Command Palette (Ctrl+P, type to filter, Enter to execute)"),
+        );
         frame.render_widget(search_input, inner[0]);
 
         let list_widget = List::new(items).block(Block::default().borders(Borders::NONE));

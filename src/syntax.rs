@@ -144,8 +144,13 @@ mod tests {
         let lines = highlight_content("fn main() {}\n", "main.rs", 10);
         assert_eq!(lines.len(), 1);
         let spans = &lines[0].spans;
-        assert!(spans.iter().any(|s| s.content == "fn"
-            && s.style == Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)));
+        assert!(spans.iter().any(|s| {
+            s.content == "fn"
+                && s.style
+                    == Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD)
+        }));
     }
 
     #[test]
@@ -153,16 +158,22 @@ mod tests {
         let lines = highlight_content("let s = \"hello\";\n", "main.rs", 10);
         assert_eq!(lines.len(), 1);
         let spans = &lines[0].spans;
-        assert!(spans.iter().any(|s| s.content == "hello"
-            && s.style == Style::default().fg(Color::Yellow)));
+        assert!(
+            spans
+                .iter()
+                .any(|s| s.content == "hello" && s.style == Style::default().fg(Color::Yellow))
+        );
     }
 
     #[test]
     fn highlights_number_as_magenta() {
         let lines = highlight_content("let x = 42;\n", "main.rs", 10);
         let spans = &lines[0].spans;
-        assert!(spans.iter().any(|s| s.content == "42"
-            && s.style == Style::default().fg(Color::Magenta)));
+        assert!(
+            spans
+                .iter()
+                .any(|s| s.content == "42" && s.style == Style::default().fg(Color::Magenta))
+        );
     }
 
     #[test]
@@ -194,8 +205,14 @@ mod tests {
     fn keywords_highlighted_regardless_of_extension() {
         let lines = highlight_content("fn main()", "Makefile", 10);
         let spans = &lines[0].spans;
-        let keyword_style = Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD);
-        assert!(spans.iter().any(|s| s.content == "fn" && s.style == keyword_style));
+        let keyword_style = Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD);
+        assert!(
+            spans
+                .iter()
+                .any(|s| s.content == "fn" && s.style == keyword_style)
+        );
     }
 
     #[test]

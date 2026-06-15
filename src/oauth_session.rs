@@ -196,7 +196,10 @@ fn try_refresh(session: &OAuthSession) -> Result<Option<OAuthSession>> {
         if !response.status().is_success() {
             return Ok(None);
         }
-        let wire: RefreshWire = response.json().await.context("Invalid OAuth refresh response")?;
+        let wire: RefreshWire = response
+            .json()
+            .await
+            .context("Invalid OAuth refresh response")?;
         if wire.error.is_some() {
             return Ok(None);
         }
@@ -218,9 +221,7 @@ fn try_refresh(session: &OAuthSession) -> Result<Option<OAuthSession>> {
             token_type: wire.token_type.unwrap_or_else(|| "bearer".to_string()),
             scope,
             expires_at_unix: wire.expires_in.map(|s| now.saturating_add(s)),
-            refresh_token: wire
-                .refresh_token
-                .or(Some(refresh_token)),
+            refresh_token: wire.refresh_token.or(Some(refresh_token)),
             refresh_expires_at_unix: wire.refresh_token_expires_in.map(|s| now.saturating_add(s)),
             client_id,
         }))
