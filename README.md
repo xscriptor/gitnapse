@@ -9,7 +9,7 @@
 </div>
 
 <div align="center">
-<img src="https://xscriptor.github.io/badges/social/github.svg" alt="Github badge" /> <img src="https://xscriptor.github.io/badges/languages/rust.svg" alt="Rust badge" /> <img src="https://xscriptor.github.io/badges/os/linux.svg" alt="Linux badge" /> <img src="https://xscriptor.github.io/badges/os/macos.svg" alt="Mac badge" /> <img src="https://xscriptor.github.io/badges/os/windows.svg" alt="Windows badge" />
+<img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License" /> <img src="https://img.shields.io/badge/rust-1.84%2B-orange.svg" alt="Rust 1.84+" /> <img src="https://img.shields.io/github/v/release/xscriptor/gitnapse?include_prereleases&label=release" alt="GitHub Release" /> <img src="https://github.com/xscriptor/gitnapse/actions/workflows/ci.yml/badge.svg" alt="CI" /> <img src="https://img.shields.io/badge/platform-linux%20%7C%20macos%20%7C%20windows-lightgrey.svg" alt="Platform" />
 </div>
 
 <div id="content"></div>
@@ -101,12 +101,14 @@ wget -qO- https://raw.githubusercontent.com/xscriptor/gitnapse/main/scripts/inst
 
 <h2 id="docs" align="center">Documentation</h2>
 <ul>
+  <li><a href="./docs/OVERVIEW.md"><code>OVERVIEW.md</code></a> - complete feature list and capabilities</li>
   <li><a href="./docs/INSTALLATION.md"><code>INSTALLATION.md</code></a> - full install and uninstall by platform</li>
   <li><a href="./docs/REMOTE_INSTALLATION.md"><code>REMOTE_INSTALLATION.md</code></a> - remote scripts, parameters, and examples</li>
+  <li><a href="./docs/USAGE.md"><code>USAGE.md</code></a> - full command and in-app usage guide</li>
   <li><a href="./docs/OAUTH_AUTHENTICATION.md"><code>OAUTH_AUTHENTICATION.md</code></a> - OAuth login flows with octocrab and secure setup</li>
+  <li><a href="./docs/THEME_CONFIG.md"><code>THEME_CONFIG.md</code></a> - theme file format and customization</li>
   <li><a href="./docs/COLLABORATIVE_SECTION.md"><code>COLLABORATIVE_SECTION.md</code></a> - branch protection, PR workflow, and release publishing collaboration guide</li>
   <li><a href="./docs/RELEASE_WORKFLOW.md"><code>RELEASE_WORKFLOW.md</code></a> - release build/publish workflow and versioning commands</li>
-  <li><a href="./docs/USAGE.md"><code>USAGE.md</code></a> - full command and in-app usage guide</li>
   <li><a href="./docs/ARCHITECTURE.md"><code>ARCHITECTURE.md</code></a> - technical architecture details</li>
   <li><a href="./docs/IMPLEMENTATION_LOG.md"><code>IMPLEMENTATION_LOG.md</code></a> - implementation materialization log</li>
   <li><a href="./docs/tests/README.md"><code>docs/tests/README.md</code></a> - test and security audit documentation index</li>

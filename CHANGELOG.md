@@ -93,3 +93,19 @@
 - **CI workflow**: Added `.github/workflows/ci.yml` that runs `cargo fmt --check`, `cargo clippy`, and `cargo test` on every push and PR. (`./github/workflows/ci.yml`)
 
 - **Docstrings**: Added documentation comments (`///`) to all public functions in `config.rs`, `cache.rs`, `syntax.rs`, and `secure_store.rs`.
+
+- **Pull request management**: View PR detail (title, body, stats, branches), approve, request changes, comment, merge, close. Browse reviews, comments, and commits per PR. Enter PR number from tree search. 8 new GitHub API methods. (`src/app/`, `src/github/`, `src/models/`)
+
+- **Custom review comments**: Approve, request changes, and comment actions prompt for custom text before submitting. Esc cancels, Enter submits. (`src/app/commands.rs`)
+
+- **PR creation**: 4-step guided wizard (title, head branch, base branch, optional body) via `Create Pull Request` in command palette. (`src/app/commands.rs`)
+
+- **Three merge methods**: Merge commit, squash, or rebase selectable from PR detail view. (`src/app/commands.rs`)
+
+- **Module refactoring**: Major codebase restructure. `src/github.rs` split into `github/` (6 files), `src/app/mod.rs` split into `app/input/` (4 files), `app/network.rs`, `app/commands.rs`, `app/actions.rs`. `src/config.rs` split into `config/` (4 files). `src/models.rs` split into `models/` (4 files). (`src/github/`, `src/app/`, `src/config/`, `src/models/`)
+
+- **DRY HTTP helpers**: `send_and_check_json()` eliminates ~200 lines of boilerplate across 12 API methods. (`src/github/mod.rs`)
+
+- **Test consolidation**: Moved 3 integration tests into `github/mod.rs`, deleted `tests/github_search_tests.rs`. (`src/github/mod.rs`)
+
+- **Dependency updates**: `keyring` 3.6 -> 4.0 + `keyring-core` 1.0, `octocrab` 0.49 -> 0.53, added `nucleo-matcher` for fuzzy search. (`Cargo.toml`)
