@@ -2,6 +2,7 @@ pub mod app;
 pub mod auth;
 pub mod cache;
 pub mod config;
+pub mod error;
 pub mod github;
 pub mod models;
 pub mod oauth;

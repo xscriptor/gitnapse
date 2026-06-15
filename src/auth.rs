@@ -38,6 +38,7 @@ pub fn load_token() -> Result<Option<String>> {
 
     let file = token_file()?;
     secure_store::load_secret(TOKEN_SECRET_KEY, &file)
+        .map_err(|e| anyhow!("{e}"))
 }
 
 pub fn save_token(token: &str) -> Result<()> {
@@ -47,14 +48,16 @@ pub fn save_token(token: &str) -> Result<()> {
     }
 
     let file = token_file()?;
-    let _ = secure_store::save_secret(TOKEN_SECRET_KEY, &file, token)?;
+    let _ = secure_store::save_secret(TOKEN_SECRET_KEY, &file, token)
+        .map_err(|e| anyhow!("{e}"))?;
 
     Ok(())
 }
 
 pub fn clear_token() -> Result<()> {
     let file = token_file()?;
-    secure_store::clear_secret(TOKEN_SECRET_KEY, &file)?;
+    secure_store::clear_secret(TOKEN_SECRET_KEY, &file)
+        .map_err(|e| anyhow!("{e}"))?;
     let _ = oauth_session::clear_session();
     Ok(())
 }

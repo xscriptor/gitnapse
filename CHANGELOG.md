@@ -28,8 +28,68 @@
 
 - **is_some_and idioms**: Replaced `.ok().filter().is_some()` with `.is_ok_and()` in `auth.rs` and `secure_store.rs`. (`src/auth.rs:84-95`, `src/secure_store.rs:14-17`)
 
+- **TUI event poll rate**: Reduced from 120ms to 16ms for smoother responsiveness (~60 FPS). (`src/app/mod.rs:1069`)
+
+- **Preview scroll viewport**: Replaced hardcoded 30-line viewport with the actual preview pane height from the render layout. (`src/app/mod.rs:882`)
+
+- **PageUp/PageDown step size**: Now uses half the preview viewport instead of a fixed 20 lines. (`src/app/mod.rs:897-904`)
+
+- **Terminal panic recovery**: Installed a panic hook that restores raw mode and leaves the alternate screen, preventing a stuck terminal. (`src/app/mod.rs:1049-1054`)
+
+- **Resize event handling**: Added explicit `Event::Resize` handler that updates the status bar. (`src/app/mod.rs:1090-1092`)
+
+- **Rate limit tracking**: GitHubClient now extracts `x-ratelimit-remaining` and `x-ratelimit-reset` headers from every response and exposes them via public methods. (`src/github.rs:108-131`)
+
+- **Branch pagination**: `fetch_branches` now loops over multiple pages, supporting repos with more than 100 branches. (`src/github.rs`)
+
+- **Blob API fallback**: When the Contents API returns 403 (file >1MB), automatically falls back to the Git Blobs API via SHA lookup. (`src/github.rs`)
+
+- **@me query edge cases**: Improved `parse_me_query` to handle multiple spaces after `@me`, bare `me:`, and reject `@me,` comma forms correctly. (`src/github.rs:46-93`)
+
+- **OAuth runtime reuse**: Created a shared `OnceLock<Runtime>` to avoid allocating a new tokio runtime on every OAuth login. (`src/oauth.rs`)
+
+- **Unused http dependency**: Replaced `use http::header::ACCEPT` with `use reqwest::header::ACCEPT` and removed `http = "1.3"` from Cargo.toml. (`src/oauth.rs:5`, `Cargo.toml`)
+
+- **Unused sha2 dependency**: Removed `sha2 = "0.11"` from Cargo.toml. (`Cargo.toml`)
+
 ### Added
 
 - **Unit tests for syntax.rs**: 9 tests covering keyword highlighting, string/number/comment detection, max_lines, empty content, and unknown extensions. (`src/syntax.rs:134-215`)
 
 - **Unit tests for config.rs**: 3 tests for roundtrip serialization, invalid JSON handling, and missing fields. (`src/config.rs:58-83`)
+
+- **Unit tests for github.rs parse_me_query**: 11 tests covering exact match, case insensitivity, multiple spaces, language filters, comma rejection, special characters, and `me:` prefix forms. (`src/github.rs`)
+
+- **Theme externalization**: Color palette can now be customized via `theme.jsonc` in the config directory. Falls back to the built-in 16-color palette if the file is absent. (`src/config.rs:75-130`, `src/app/theme.rs:27-33`, `docs/THEME_CONFIG.md`)
+
+- **12 built-in theme presets**: X, Madrid, Lahabana, Miami, Paris, Tokio, Oslo, Helsinki, Berlin, London, Praha, Bogota. Auto-installed from `themes/` directory on first run. (`themes/*.jsonc`)
+
+- **Keybindings config**: Keybindings can be customized via `keybindings.jsonc` in config directory. Default bindings match the existing hardcoded keys. (`src/config.rs`)
+
+- **Command palette**: Press Ctrl+P to open a VS Code-style command palette with fuzzy search over available actions: search repos, switch branch, find file, clone, download, list issues/PRs, view commits/CI status, compare branches, toggle tree view, and more. Non-blocking with `std::thread::spawn` for network calls. (`src/app/mod.rs`, `src/app/render.rs`)
+
+- **Channel-based async**: Network operations run on background threads via `mpsc` channel, keeping the TUI responsive during API calls. (`src/app/mod.rs`)
+
+- **GitHub API coverage**: Added models and client methods for commits, diffs, issues, pull requests, CI check runs, starred repos, and repository lookup. (`src/models.rs`, `src/github.rs`)
+
+- **Typed error handling**: Introduced `thiserror`-based error enums (`GitHubError`, `AuthError`, `CacheError`, `OAuthError`) across all library modules, replacing raw `anyhow` strings. (`src/error.rs`, `src/github.rs`, `src/cache.rs`, `src/auth.rs`, `src/secure_store.rs`)
+
+- **Retry logic**: Network calls retry up to 3 times with exponential backoff on transient errors. (`src/github.rs`)
+
+- **Async HTTP**: GitHubClient migrated from `reqwest::blocking` to `reqwest::async` with a shared `current_thread` tokio runtime. Public API remains synchronous via `block_on`. (`src/github.rs`, `src/oauth_session.rs`, `Cargo.toml`)
+
+- **Token zeroize**: Token input buffer uses `secrecy::SecretString` and `Zeroize` on escape/save to clear sensitive data from memory. (`src/app/mod.rs`, `src/app/render.rs`)
+
+- **OAuth client_id warning**: Warning printed to stderr if no OAuth client ID environment variable is found. (`src/app/mod.rs:151-159`)
+
+- **10 TUI event tests**: Added tests for key navigation (q, /, Esc, Tab, Up/Down), token input (Esc zeroize, Enter save), and search input. (`src/app/mod.rs`)
+
+- **Preview cache binary support**: Cache now stores raw `Vec<u8>` instead of `String`, supporting binary files and ETag metadata. (`src/cache.rs:12-13, 43-88`)
+
+- **Loading indicators**: Status bar now shows "Loading..." before network operations (search, branch fetch, tree load, file preview). (`src/app/mod.rs:213, 254, 290, 355`)
+
+- **Dynamic tree indent**: Replaced the fixed 9-element `INDENTS` constant with `"  ".repeat(depth.min(20))` for arbitrary-depth directories. (`src/app/render.rs`)
+
+- **CI workflow**: Added `.github/workflows/ci.yml` that runs `cargo fmt --check`, `cargo clippy`, and `cargo test` on every push and PR. (`./github/workflows/ci.yml`)
+
+- **Docstrings**: Added documentation comments (`///`) to all public functions in `config.rs`, `cache.rs`, `syntax.rs`, and `secure_store.rs`.

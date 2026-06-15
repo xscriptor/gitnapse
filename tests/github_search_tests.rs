@@ -124,7 +124,7 @@ fn me_query_returns_error_on_unauthorized() {
             .search_repositories_page("@me", 1, 30)
             .expect_err("must fail");
         assert!(
-            err.to_string().contains("requires a valid token/session"),
+            err.to_string().contains("Authentication required"),
             "unexpected error: {err}"
         );
     });

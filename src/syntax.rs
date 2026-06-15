@@ -35,6 +35,11 @@ const KEYWORDS: &[&str] = &[
     "var",
 ];
 
+/// Highlights source code syntax for display in the TUI.
+///
+/// Applies keyword highlighting, string coloring, number coloring, and
+/// comment styling based on the file extension. The output is limited to
+/// `max_lines` lines.
 pub fn highlight_content(content: &str, path: &str, max_lines: usize) -> Vec<Line<'static>> {
     let ext = path
         .rsplit('.')

@@ -2,10 +2,22 @@ use crate::auth;
 use crate::github::GitHubClient;
 use crate::oauth_session;
 use anyhow::{Context, Result, anyhow};
-use http::header::ACCEPT;
+use reqwest::header::ACCEPT;
 use secrecy::{ExposeSecret, SecretString};
 use std::process::Command;
+use std::sync::OnceLock;
 use std::time::Duration;
+use tokio::runtime::Runtime;
+
+fn get_runtime() -> &'static Runtime {
+    static RUNTIME: OnceLock<Runtime> = OnceLock::new();
+    RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Cannot create tokio runtime")
+    })
+}
 
 const ENV_OAUTH_CLIENT_ID: &str = "GITNAPSE_GITHUB_OAUTH_CLIENT_ID";
 const ENV_GITHUB_CLIENT_ID: &str = "GITHUB_CLIENT_ID";
@@ -93,10 +105,7 @@ pub fn oauth_device_login_cli(
     };
 
     let device_credential = SecretString::new(client_id.clone().into());
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .context("Cannot initialize async runtime for OAuth flow")?;
+    let runtime = get_runtime();
 
     let (crab, device_codes) = runtime
         .block_on(async {

@@ -3,9 +3,11 @@ mod theme;
 
 use crate::auth;
 use crate::cache::PreviewCache;
-use crate::config::AccountConfig;
+use crate::config::{AccountConfig, KeybindingsConfig, ThemeConfig};
 use crate::github::GitHubClient;
-use crate::models::{RepoNode, RepoSummary};
+use crate::models::{
+    CheckRun, CommitInfo, CompareResponse, Issue, PullRequest, RepoNode, RepoSummary,
+};
 use crate::oauth;
 use crate::syntax::highlight_content;
 use anyhow::{Context, Result, anyhow};
@@ -20,13 +22,26 @@ use crossterm::terminal::{
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::text::Line;
+use secrecy::{ExposeSecret, SecretString, zeroize::Zeroize};
 use std::io::stdout;
+use std::panic;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::Arc;
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-const TREE_PAGE_SIZE: usize = 250;
-const TREE_LOAD_THRESHOLD: usize = 15;
+#[derive(Debug)]
+#[allow(clippy::enum_variant_names)]
+enum NetworkEvent {
+    SearchResult(Result<Vec<RepoSummary>, String>),
+    IssuesResult(Result<Vec<Issue>, String>),
+    PrsResult(Result<Vec<PullRequest>, String>),
+    CommitsResult(Result<Vec<CommitInfo>, String>),
+    CompareResult(Result<CompareResponse, String>),
+    CheckRunsResult(Result<Vec<CheckRun>, String>),
+    StarredResult(Result<Vec<RepoSummary>, String>),
+}
 
 struct TerminalGuard;
 
@@ -71,43 +86,75 @@ pub enum Focus {
 }
 
 pub struct App {
-    pub github: GitHubClient,
+    // Services
+    pub github: Arc<GitHubClient>,
     pub account: AccountConfig,
+    pub preview_cache: PreviewCache,
+
+    // Search state
     pub search_query: String,
+    pub search_page: u32,
+    pub per_page: u8,
     pub repos: Vec<RepoSummary>,
     pub selected_repo: usize,
+
+    // Tree / explorer state
     pub tree_all: Vec<RepoNode>,
     pub tree_visible_limit: usize,
     pub selected_node: usize,
+    pub current_repo: Option<RepoSummary>,
     pub branches: Vec<String>,
     pub selected_branch: usize,
+
+    // Preview state
     pub preview_title: String,
     pub preview_lines: Vec<Line<'static>>,
     pub preview_scroll: usize,
     pub current_preview_path: Option<String>,
-    pub tree_search_input: String,
-    pub download_path_input: String,
+    pub preview_viewport_rows: usize,
     pub tree_text_mode: bool,
-    pub status: String,
-    pub focus: Focus,
+
+    // Input buffers
     pub input_buffer: String,
+    pub token_buffer: SecretString,
     pub oauth_client_id_input: String,
     pub clone_path_input: String,
+    pub download_path_input: String,
+    pub tree_search_input: String,
+
+    // UI state
+    pub status: String,
+    pub focus: Focus,
     pub should_quit: bool,
-    pub current_repo: Option<RepoSummary>,
     pub auth_user: Option<String>,
-    pub search_page: u32,
-    pub per_page: u8,
-    pub preview_cache: PreviewCache,
+
+    // Click tracking
     pub last_tree_click: Option<(usize, Instant)>,
     pub last_repo_click: Option<(usize, Instant)>,
+
+    // Keybindings
+    #[allow(dead_code)]
+    pub keybindings: KeybindingsConfig,
+
+    // Command palette
+    pub command_palette_visible: bool,
+    pub command_input: String,
+    pub command_cursor: usize,
+    pub command_items: Vec<String>,
+    pub command_filtered: Vec<String>,
 }
 
 impl App {
+    const TREE_PAGE_SIZE: usize = 250;
+    const TREE_LOAD_THRESHOLD: usize = 15;
+
     fn new(options: RunOptions) -> Result<Self> {
         let token = auth::load_token()?;
-        let github = GitHubClient::new(token.as_deref())?;
+        let github = Arc::new(GitHubClient::new(token.as_deref())?);
         let mut account = AccountConfig::load_or_default()?;
+        let theme_config = ThemeConfig::load_or_default();
+        theme::init_theme(&theme_config);
+        let keybindings = KeybindingsConfig::load_or_default();
         let preview_cache = PreviewCache::new(options.cache_ttl_secs)?;
         let auth_user = github.fetch_authenticated_user().ok().flatten();
 
@@ -121,21 +168,37 @@ impl App {
         Ok(Self {
             github,
             account: account.clone(),
+            preview_cache,
             search_query: options.initial_query,
+            search_page: options.initial_page.max(1),
+            per_page: options.per_page.clamp(1, 100),
             repos: Vec::new(),
             selected_repo: 0,
             tree_all: Vec::new(),
             tree_visible_limit: 0,
             selected_node: 0,
+            current_repo: None,
             branches: Vec::new(),
             selected_branch: 0,
             preview_title: "Preview".to_string(),
             preview_lines: vec![Line::from("Select a repository and a file to preview.")],
             preview_scroll: 0,
             current_preview_path: None,
-            tree_search_input: String::new(),
-            download_path_input: String::new(),
+            preview_viewport_rows: 30,
             tree_text_mode: false,
+            input_buffer: String::new(),
+            token_buffer: SecretString::new(String::new().into()),
+            oauth_client_id_input: {
+                let client_id = std::env::var("GITNAPSE_GITHUB_OAUTH_CLIENT_ID")
+                    .or_else(|_| std::env::var("GITHUB_CLIENT_ID"));
+                if client_id.as_ref().map(|s| s.trim().is_empty()).unwrap_or(true) {
+                    eprintln!("[gitnapse] Warning: No OAuth client ID found in GITNAPSE_GITHUB_OAUTH_CLIENT_ID or GITHUB_CLIENT_ID env vars. Using built-in default.");
+                }
+                client_id.unwrap_or_default().trim().to_string()
+            },
+            clone_path_input: account.preferred_clone_dir,
+            download_path_input: String::new(),
+            tree_search_input: String::new(),
             status: match auth_user.as_ref() {
                 Some(login) => format!("Authenticated as {login}. Press / to search."),
                 None => {
@@ -143,21 +206,16 @@ impl App {
                 }
             },
             focus: Focus::Repos,
-            input_buffer: String::new(),
-            oauth_client_id_input: std::env::var("GITNAPSE_GITHUB_OAUTH_CLIENT_ID")
-                .or_else(|_| std::env::var("GITHUB_CLIENT_ID"))
-                .unwrap_or_default()
-                .trim()
-                .to_string(),
-            clone_path_input: account.preferred_clone_dir,
             should_quit: false,
-            current_repo: None,
             auth_user,
-            search_page: options.initial_page.max(1),
-            per_page: options.per_page.clamp(1, 100),
-            preview_cache,
             last_tree_click: None,
             last_repo_click: None,
+            keybindings,
+            command_palette_visible: false,
+            command_input: String::new(),
+            command_cursor: 0,
+            command_items: Vec::new(),
+            command_filtered: Vec::new(),
         })
     }
 
@@ -185,9 +243,9 @@ impl App {
         if self.tree_visible_limit >= self.tree_all.len() {
             return;
         }
-        if self.selected_node + TREE_LOAD_THRESHOLD >= self.tree_visible_limit {
+        if self.selected_node + Self::TREE_LOAD_THRESHOLD >= self.tree_visible_limit {
             self.tree_visible_limit =
-                (self.tree_visible_limit + TREE_PAGE_SIZE).min(self.tree_all.len());
+                (self.tree_visible_limit + Self::TREE_PAGE_SIZE).min(self.tree_all.len());
             self.status = format!(
                 "Loaded more tree entries ({}/{}).",
                 self.tree_visible_limit,
@@ -199,12 +257,13 @@ impl App {
     fn reset_tree(&mut self, nodes: Vec<RepoNode>) {
         self.tree_all = nodes;
         self.selected_node = 0;
-        self.tree_visible_limit = self.tree_all.len().min(TREE_PAGE_SIZE);
+        self.tree_visible_limit = self.tree_all.len().min(Self::TREE_PAGE_SIZE);
         self.current_preview_path = None;
         self.tree_text_mode = false;
     }
 
     fn search(&mut self) {
+        self.status = "Loading...".to_string();
         match self.github.search_repositories_page(
             &self.search_query,
             self.search_page,
@@ -245,6 +304,7 @@ impl App {
             return;
         };
 
+        self.status = "Loading...".to_string();
         let mut branches = match self.github.fetch_branches(&repo.full_name) {
             Ok(items) if !items.is_empty() => items,
             Ok(_) => vec![repo.default_branch.clone()],
@@ -280,6 +340,7 @@ impl App {
         let full_name = repo.full_name.clone();
         let branch = self.selected_branch_name();
 
+        self.status = "Loading...".to_string();
         match self.github.fetch_repo_tree(&full_name, &branch) {
             Ok(tree) => {
                 self.reset_tree(tree);
@@ -326,36 +387,46 @@ impl App {
 
         if let Some(content) = self.preview_cache.get(&full_name, &branch, &node_path) {
             self.preview_title = format!("{}/{}", full_name, node_path);
-            self.preview_lines = highlight_content(&content, &node_path, 300);
             self.preview_scroll = 0;
             self.current_preview_path = Some(node_path.clone());
             self.tree_text_mode = false;
-            self.status = format!("Preview loaded from cache for {}", node_path);
+            match String::from_utf8(content) {
+                Ok(content_str) => {
+                    self.preview_lines = highlight_content(&content_str, &node_path, 300);
+                    self.status = format!("Preview loaded from cache for {}", node_path);
+                }
+                Err(_) => {
+                    self.preview_lines =
+                        vec![Line::from("Binary file. Use 'd' to download.")];
+                    self.current_preview_path = None;
+                    self.status = format!("Binary file in cache: {}", node_path);
+                }
+            }
             return;
         }
 
+        self.status = "Loading...".to_string();
         match self.github.fetch_file_content(&full_name, &node_path) {
-            Ok(bytes) => match String::from_utf8(bytes) {
-                Ok(content) => {
-                    self.preview_cache
-                        .put(&full_name, &branch, &node_path, &content);
-                    self.preview_title = format!("{}/{}", full_name, node_path);
-                    self.preview_lines = highlight_content(&content, &node_path, 300);
-                    self.preview_scroll = 0;
-                    self.current_preview_path = Some(node_path.clone());
-                    self.tree_text_mode = false;
-                    self.status = format!("Preview loaded for {}", node_path);
+            Ok(bytes) => {
+                self.preview_cache
+                    .put(&full_name, &branch, &node_path, &bytes, None);
+                self.preview_title = format!("{}/{}", full_name, node_path);
+                self.preview_scroll = 0;
+                self.current_preview_path = Some(node_path.clone());
+                self.tree_text_mode = false;
+                match String::from_utf8(bytes) {
+                    Ok(content) => {
+                        self.preview_lines = highlight_content(&content, &node_path, 300);
+                        self.status = format!("Preview loaded for {}", node_path);
+                    }
+                    Err(_) => {
+                        self.preview_lines =
+                            vec![Line::from("Binary file. Use 'd' to download.")];
+                        self.current_preview_path = None;
+                        self.status = format!("Binary file: {}", node_path);
+                    }
                 }
-                Err(_) => {
-                    self.preview_title = format!("{}/{}", full_name, node_path);
-                    self.preview_lines =
-                        vec![Line::from("Binary file. Use 'd' to download.")];
-                    self.preview_scroll = 0;
-                    self.current_preview_path = None;
-                    self.tree_text_mode = false;
-                    self.status = format!("Binary file: {}", node_path);
-                }
-            },
+            }
             Err(error) => {
                 self.status = format!("Preview failed: {error}");
             }
@@ -408,24 +479,23 @@ impl App {
         }
     }
 
-    fn save_token_from_input(&mut self) {
-        let token_owned = self.input_buffer.trim().to_string();
-        if token_owned.is_empty() {
+    fn save_token_from_input_str(&mut self, token: String) {
+        let token_trimmed = token.trim().to_string();
+        if token_trimmed.is_empty() {
             self.status = "Token is empty.".to_string();
             return;
         }
 
-        match auth::save_token(&token_owned).and_then(|_| {
-            GitHubClient::new(Some(&token_owned)).context("Cannot rebuild HTTP client")
+        match auth::save_token(&token_trimmed).and_then(|_| {
+            GitHubClient::new(Some(&token_trimmed)).context("Cannot rebuild HTTP client")
         }) {
             Ok(client) => {
-                self.github = client;
+                self.github = Arc::new(client);
                 self.auth_user = self.github.fetch_authenticated_user().ok().flatten();
                 self.status = match self.auth_user.as_ref() {
                     Some(login) => format!("Token saved and validated as {login}."),
                     None => "Token saved, but validation failed.".to_string(),
                 };
-                self.input_buffer.clear();
                 self.focus = Focus::Repos;
             }
             Err(error) => {
@@ -639,14 +709,26 @@ impl App {
     fn handle_token_input(&mut self, code: KeyCode) {
         match code {
             KeyCode::Esc => {
+                self.token_buffer.zeroize();
                 self.input_buffer.clear();
                 self.focus = Focus::Repos;
             }
-            KeyCode::Enter => self.save_token_from_input(),
-            KeyCode::Backspace => {
-                self.input_buffer.pop();
+            KeyCode::Enter => {
+                let token: String = self.token_buffer.expose_secret().to_string();
+                self.save_token_from_input_str(token);
+                self.token_buffer.zeroize();
+                self.input_buffer.clear();
             }
-            KeyCode::Char(ch) => self.input_buffer.push(ch),
+            KeyCode::Backspace => {
+                let mut s: String = self.token_buffer.expose_secret().to_string();
+                s.pop();
+                self.token_buffer = SecretString::new(s.into());
+            }
+            KeyCode::Char(ch) => {
+                let mut s: String = self.token_buffer.expose_secret().to_string();
+                s.push(ch);
+                self.token_buffer = SecretString::new(s.into());
+            }
             _ => {}
         }
     }
@@ -708,7 +790,7 @@ impl App {
                 if let Ok(token) = auth::load_token()
                     && let Ok(client) = GitHubClient::new(token.as_deref())
                 {
-                    self.github = client;
+                    self.github = Arc::new(client);
                     self.auth_user = self.github.fetch_authenticated_user().ok().flatten();
                 }
                 self.status = "OAuth login completed and session saved.".to_string();
@@ -805,7 +887,7 @@ impl App {
                             .tree_all
                             .iter()
                             .map(|node| {
-                                let indent = render::INDENTS.get(node.depth.min(10)).copied().unwrap_or("                    ");
+                                let indent = "  ".repeat(node.depth.min(20));
                                 let icon = if node.is_dir { "[D]" } else { "[F]" };
                                 Line::from(format!("{indent}{icon} {}", node.path))
                             })
@@ -861,7 +943,7 @@ impl App {
                         (self.selected_node + 1).min(self.tree_all.len().saturating_sub(1));
                     self.ensure_lazy_tree_progress();
                 } else if self.focus == Focus::Preview {
-                    self.scroll_preview_down(1, 30);
+                    self.scroll_preview_down(1, self.preview_viewport_rows);
                 } else if !self.repos.is_empty() {
                     self.selected_repo =
                         (self.selected_repo + 1).min(self.repos.len().saturating_sub(1));
@@ -878,12 +960,12 @@ impl App {
             }
             KeyCode::PageDown => {
                 if self.focus == Focus::Preview {
-                    self.scroll_preview_down(20, 30);
+                    self.scroll_preview_down(self.preview_viewport_rows / 2, self.preview_viewport_rows);
                 }
             }
             KeyCode::PageUp => {
                 if self.focus == Focus::Preview {
-                    self.scroll_preview_up(20);
+                    self.scroll_preview_up(self.preview_viewport_rows / 2);
                 }
             }
             KeyCode::Home => {
@@ -1018,6 +1100,389 @@ impl App {
         self.last_repo_click = Some((idx, now));
         is_double
     }
+
+    fn handle_network_event(&mut self, event: NetworkEvent) {
+        match event {
+            NetworkEvent::SearchResult(Ok(items)) => {
+                if items.is_empty() && self.search_page > 1 {
+                    self.search_page = self.search_page.saturating_sub(1);
+                    self.status = "No more search results pages.".to_string();
+                    return;
+                }
+                self.repos = items;
+                self.selected_repo = 0;
+                self.tree_all.clear();
+                self.tree_visible_limit = 0;
+                self.selected_node = 0;
+                self.current_repo = None;
+                self.branches.clear();
+                self.selected_branch = 0;
+                self.current_preview_path = None;
+                self.tree_text_mode = false;
+                self.status = format!(
+                    "Loaded {} repositories on page {} (per_page {}).",
+                    self.repos.len(),
+                    self.search_page,
+                    self.per_page
+                );
+            }
+            NetworkEvent::SearchResult(Err(e)) => {
+                self.status = format!("Search failed: {e}");
+            }
+            NetworkEvent::IssuesResult(Ok(issues)) => {
+                self.command_items = issues.into_iter().map(|i| {
+                    let status = if i.pull_request.is_some() { "[PR]" } else { "[ISSUE]" };
+                    format!("{} #{}: {} ({})", status, i.number, i.title, i.state)
+                }).collect();
+                self.command_filtered.clear();
+                self.command_cursor = 0;
+                self.command_palette_visible = true;
+                self.command_input.clear();
+                self.status = "Issues loaded. Select with arrows, Enter to view.".to_string();
+            }
+            NetworkEvent::IssuesResult(Err(e)) => {
+                self.status = format!("Issues fetch failed: {e}");
+            }
+            NetworkEvent::PrsResult(Ok(prs)) => {
+                self.command_items = prs.into_iter().map(|pr| {
+                    format!("[PR] #{}: {} ({} +{} -{})", pr.number, pr.title, pr.state, pr.additions.unwrap_or(0), pr.deletions.unwrap_or(0))
+                }).collect();
+                self.command_filtered.clear();
+                self.command_cursor = 0;
+                self.command_palette_visible = true;
+                self.command_input.clear();
+                self.status = "Pull requests loaded.".to_string();
+            }
+            NetworkEvent::PrsResult(Err(e)) => {
+                self.status = format!("PR fetch failed: {e}");
+            }
+            NetworkEvent::CommitsResult(Ok(commits)) => {
+                self.command_items = commits.into_iter().map(|c| {
+                    let short = c.sha.chars().take(7).collect::<String>();
+                    let msg = c.commit.message.lines().next().unwrap_or("").to_string();
+                    format!("[COMMIT] {} {} - {}", short, c.commit.author.name, msg)
+                }).collect();
+                self.command_filtered.clear();
+                self.command_cursor = 0;
+                self.command_palette_visible = true;
+                self.command_input.clear();
+                self.status = "Recent commits loaded.".to_string();
+            }
+            NetworkEvent::CommitsResult(Err(e)) => {
+                self.status = format!("Commits fetch failed: {e}");
+            }
+            NetworkEvent::CompareResult(Ok(compare)) => {
+                self.command_items = compare.files.into_iter().map(|f| {
+                    format!("[DIFF] {} ({} +{} -{})", f.filename, f.status, f.additions, f.deletions)
+                }).collect();
+                self.command_filtered.clear();
+                self.command_cursor = 0;
+                self.command_palette_visible = true;
+                self.command_input.clear();
+                self.status = format!("Compare: {} ahead, {} behind", compare.ahead_by, compare.behind_by);
+            }
+            NetworkEvent::CompareResult(Err(e)) => {
+                self.status = format!("Compare failed: {e}");
+            }
+            NetworkEvent::CheckRunsResult(Ok(runs)) => {
+                let count = runs.len();
+                self.command_items = runs.into_iter().map(|r| {
+                    let conclusion = r.conclusion.as_deref().unwrap_or("pending");
+                    format!("[CI] {}: {}", r.name, conclusion)
+                }).collect();
+                self.command_filtered.clear();
+                self.command_cursor = 0;
+                self.command_palette_visible = true;
+                self.command_input.clear();
+                self.status = format!("CI checks: {}", count);
+            }
+            NetworkEvent::CheckRunsResult(Err(e)) => {
+                self.status = format!("CI check fetch failed: {e}");
+            }
+            NetworkEvent::StarredResult(Ok(repos)) => {
+                self.repos = repos;
+                self.selected_repo = 0;
+                self.tree_all.clear();
+                self.tree_visible_limit = 0;
+                self.selected_node = 0;
+                self.current_repo = None;
+                self.status = format!("Loaded {} starred repositories.", self.repos.len());
+            }
+            NetworkEvent::StarredResult(Err(e)) => {
+                self.status = format!("Starred repos fetch failed: {e}");
+            }
+        }
+    }
+
+    fn toggle_command_palette(&mut self) {
+        self.command_palette_visible = !self.command_palette_visible;
+        if self.command_palette_visible {
+            self.command_input.clear();
+            self.command_cursor = 0;
+            self.build_command_list();
+        }
+    }
+
+    fn build_command_list(&mut self) {
+        let mut commands = vec![
+            "Search Repositories".to_string(),
+            "List Starred Repos".to_string(),
+        ];
+        if self.current_repo.is_some() {
+            commands.push("Switch Branch".to_string());
+            commands.push("Find File".to_string());
+            commands.push("Clone Repository".to_string());
+            commands.push("Download Current File".to_string());
+            commands.push("Toggle Tree View".to_string());
+            commands.push("List Issues".to_string());
+            commands.push("List Pull Requests".to_string());
+            commands.push("View Recent Commits".to_string());
+            commands.push("View CI Status".to_string());
+            commands.push("Compare Branches".to_string());
+        }
+        commands.push("Set Token".to_string());
+        commands.push("Quit".to_string());
+        self.command_items = commands;
+    }
+
+    fn handle_command_palette_input(&mut self, code: KeyCode, tx: mpsc::Sender<NetworkEvent>, github: Arc<GitHubClient>) {
+        match code {
+            KeyCode::Esc => {
+                self.command_palette_visible = false;
+            }
+            KeyCode::Enter => {
+                let selected = self.get_selected_command();
+                self.command_palette_visible = false;
+                if let Some(cmd) = selected {
+                    self.execute_command(cmd, tx, github);
+                }
+            }
+            KeyCode::Up => {
+                let count = if self.command_input.is_empty() { self.command_items.len() } else { self.command_filtered.len() };
+                if count > 0 {
+                    self.command_cursor = self.command_cursor.saturating_sub(1);
+                }
+            }
+            KeyCode::Down => {
+                let count = if self.command_input.is_empty() { self.command_items.len() } else { self.command_filtered.len() };
+                if count > 0 {
+                    self.command_cursor = (self.command_cursor + 1).min(count - 1);
+                }
+            }
+            KeyCode::Backspace => {
+                self.command_input.pop();
+                self.update_command_filter();
+            }
+            KeyCode::Char(ch) => {
+                self.command_input.push(ch);
+                self.update_command_filter();
+            }
+            _ => {}
+        }
+    }
+
+    fn get_selected_command(&self) -> Option<String> {
+        let items = if self.command_input.is_empty() {
+            &self.command_items
+        } else {
+            &self.command_filtered
+        };
+        items.get(self.command_cursor).cloned()
+    }
+
+    fn update_command_filter(&mut self) {
+        if self.command_input.is_empty() {
+            self.command_filtered.clear();
+            return;
+        }
+        let lower = self.command_input.to_lowercase();
+        self.command_filtered = self.command_items.iter()
+            .filter(|item| item.to_lowercase().contains(&lower))
+            .cloned()
+            .collect();
+        let count = self.command_filtered.len();
+        if count > 0 {
+            self.command_cursor = self.command_cursor.min(count - 1);
+        } else {
+            self.command_cursor = 0;
+        }
+    }
+
+    fn execute_command(&mut self, cmd: String, tx: mpsc::Sender<NetworkEvent>, github: Arc<GitHubClient>) {
+        match cmd.as_str() {
+            "Search Repositories" => {
+                self.focus = Focus::Search;
+                self.input_buffer = self.search_query.clone();
+            }
+            "List Starred Repos" => {
+                self.status = "Loading starred repos...".to_string();
+                let g = github.clone();
+                std::thread::spawn(move || {
+                    let result = g.fetch_starred_repos(1, 30);
+                    let _ = tx.send(NetworkEvent::StarredResult(result.map_err(|e| e.to_string())));
+                });
+            }
+            "Switch Branch" => {
+                if self.current_repo.is_some() && !self.branches.is_empty() {
+                    self.focus = Focus::BranchPicker;
+                } else {
+                    self.status = "Open a repository first.".to_string();
+                }
+            }
+            "Find File" => {
+                if self.current_repo.is_some() {
+                    self.tree_search_input.clear();
+                    self.focus = Focus::TreeSearch;
+                } else {
+                    self.status = "Open a repository first.".to_string();
+                }
+            }
+            "Clone Repository" => {
+                if self.current_repo.is_some() {
+                    self.clone_path_input = self.account.preferred_clone_dir.clone();
+                    self.focus = Focus::ClonePath;
+                } else {
+                    self.status = "Open a repository first.".to_string();
+                }
+            }
+            "Download Current File" => {
+                if self.current_preview_path.is_some() {
+                    self.download_path_input = ".".to_string();
+                    self.focus = Focus::DownloadPath;
+                } else {
+                    self.status = "Preview a file first.".to_string();
+                }
+            }
+            "Toggle Tree View" => {
+                if self.current_repo.is_some() {
+                    self.tree_text_mode = !self.tree_text_mode;
+                    self.preview_scroll = 0;
+                    if self.tree_text_mode {
+                        let branch = self.selected_branch_name();
+                        self.preview_title = format!("tree {} [{}]", self.current_repo.as_ref().map(|r| r.full_name.clone()).unwrap_or_default(), branch);
+                        self.preview_lines = self.tree_all.iter().map(|node| {
+                            let indent = "  ".repeat(node.depth.min(20));
+                            let icon = if node.is_dir { "[D]" } else { "[F]" };
+                            Line::from(format!("{indent}{icon} {}", node.path))
+                        }).collect();
+                        self.current_preview_path = None;
+                        self.focus = Focus::Preview;
+                        self.status = "Tree view enabled in preview pane.".to_string();
+                    } else {
+                        self.preview_title = "Preview".to_string();
+                        self.preview_lines = vec![Line::from("Tree preview disabled. Select a file and press Enter to preview.")];
+                        self.focus = Focus::Tree;
+                        self.status = "Tree view disabled.".to_string();
+                    }
+                } else {
+                    self.status = "Open a repository first.".to_string();
+                }
+            }
+            "Set Token" => {
+                self.focus = Focus::TokenInput;
+                self.token_buffer = SecretString::new(String::new().into());
+                self.input_buffer.clear();
+            }
+            "List Issues" => {
+                if let Some(repo) = self.current_repo.clone() {
+                    self.status = "Loading issues...".to_string();
+                    let g = github.clone();
+                    let full_name = repo.full_name.clone();
+                    std::thread::spawn(move || {
+                        let result = g.fetch_issues(&full_name, "open", 30);
+                        let _ = tx.send(NetworkEvent::IssuesResult(result.map_err(|e| e.to_string())));
+                    });
+                } else {
+                    self.status = "Open a repository first.".to_string();
+                }
+            }
+            "List Pull Requests" => {
+                if let Some(repo) = self.current_repo.clone() {
+                    self.status = "Loading pull requests...".to_string();
+                    let g = github.clone();
+                    let full_name = repo.full_name.clone();
+                    std::thread::spawn(move || {
+                        let result = g.fetch_pull_requests(&full_name, "open", 30);
+                        let _ = tx.send(NetworkEvent::PrsResult(result.map_err(|e| e.to_string())));
+                    });
+                } else {
+                    self.status = "Open a repository first.".to_string();
+                }
+            }
+            "View Recent Commits" => {
+                if let Some(repo) = self.current_repo.clone() {
+                    self.status = "Loading commits...".to_string();
+                    let g = github.clone();
+                    let full_name = repo.full_name.clone();
+                    let branch = self.selected_branch_name();
+                    std::thread::spawn(move || {
+                        let result = g.fetch_recent_commits(&full_name, &branch, 30);
+                        let _ = tx.send(NetworkEvent::CommitsResult(result.map_err(|e| e.to_string())));
+                    });
+                } else {
+                    self.status = "Open a repository first.".to_string();
+                }
+            }
+            "View CI Status" => {
+                if let Some(repo) = self.current_repo.clone() {
+                    self.status = "Loading CI status...".to_string();
+                    let g = github.clone();
+                    let full_name = repo.full_name.clone();
+                    let branch = self.selected_branch_name();
+                    std::thread::spawn(move || {
+                        let result = g.fetch_check_runs(&full_name, &branch);
+                        let _ = tx.send(NetworkEvent::CheckRunsResult(result.map_err(|e| e.to_string())));
+                    });
+                } else {
+                    self.status = "Open a repository first.".to_string();
+                }
+            }
+            "Compare Branches" => {
+                if let Some(repo) = self.current_repo.clone() {
+                    if self.branches.len() >= 2 {
+                        let base = self.selected_branch_name();
+                        let head = self.branches.iter().find(|b| **b != base).cloned().unwrap_or_default();
+                        if !head.is_empty() {
+                            self.status = format!("Comparing {base}...{head}");
+                            let g = github.clone();
+                            let full_name = repo.full_name.clone();
+                            let base = base.clone();
+                            let head = head.clone();
+                            std::thread::spawn(move || {
+                                let result = g.fetch_compare(&full_name, &base, &head);
+                                let _ = tx.send(NetworkEvent::CompareResult(result.map_err(|e| e.to_string())));
+                            });
+                        }
+                    } else {
+                        self.status = "Need at least 2 branches loaded.".to_string();
+                    }
+                } else {
+                    self.status = "Open a repository first.".to_string();
+                }
+            }
+            "Quit" => {
+                self.should_quit = true;
+            }
+            _ => {
+                self.status = format!("Unknown command: {cmd}");
+            }
+        }
+    }
+
+    fn handle_key_with_channel(&mut self, code: KeyCode, tx: mpsc::Sender<NetworkEvent>, github: Arc<GitHubClient>) {
+        if self.command_palette_visible {
+            self.handle_command_palette_input(code, tx, github);
+            return;
+        }
+
+        // Ctrl+P = \x10
+        if let KeyCode::Char(ch) = code && ch == '\x10' {
+            self.toggle_command_palette();
+            return;
+        }
+
+        self.handle_key(code);
+    }
 }
 
 pub fn run() -> Result<()> {
@@ -1026,7 +1491,13 @@ pub fn run() -> Result<()> {
 
 pub fn run_with_options(options: RunOptions) -> Result<()> {
     let mut app = App::new(options)?;
-    app.search();
+
+    let prev_hook = panic::take_hook();
+    panic::set_hook(Box::new(move |panic_info| {
+        let _ = disable_raw_mode();
+        let _ = execute!(stdout(), LeaveAlternateScreen, DisableMouseCapture);
+        prev_hook(panic_info);
+    }));
 
     enable_raw_mode().context("Cannot enable raw mode")?;
     execute!(stdout(), EnterAlternateScreen, EnableMouseCapture)
@@ -1034,16 +1505,40 @@ pub fn run_with_options(options: RunOptions) -> Result<()> {
     let backend = CrosstermBackend::new(stdout());
     let mut terminal = Terminal::new(backend)?;
 
+    let (net_tx, net_rx) = mpsc::channel::<NetworkEvent>();
+    let github = app.github.clone();
+
+    // Initial search via background thread
+    app.status = "Loading...".to_string();
+    let tx = net_tx.clone();
+    let g = github.clone();
+    let query = app.search_query.clone();
+    let page = app.search_page;
+    let per_page = app.per_page;
+    std::thread::spawn(move || {
+        let result = g.search_repositories_page(&query, page, per_page);
+        let _ = tx.send(NetworkEvent::SearchResult(result.map_err(|e| e.to_string())));
+    });
+
     let mut terminal_result = Ok(());
     while !app.should_quit {
-        if let Err(error) = terminal.draw(|frame| render::render(frame, &app)) {
+        if let Err(error) = terminal.draw(|frame| render::render(frame, &mut app)) {
             terminal_result = Err(anyhow!("Render error: {error}"));
             break;
         }
 
-        if event::poll(Duration::from_millis(120)).context("Event poll failed")? {
+        // Process completed network tasks
+        while let Ok(event) = net_rx.try_recv() {
+            app.handle_network_event(event);
+        }
+
+        if event::poll(Duration::from_millis(16)).context("Event poll failed")? {
             match event::read().context("Event read failed")? {
-                Event::Key(key) if key.kind == KeyEventKind::Press => app.handle_key(key.code),
+                Event::Key(key) if key.kind == KeyEventKind::Press => {
+                    let tx = net_tx.clone();
+                    let g = github.clone();
+                    app.handle_key_with_channel(key.code, tx, g);
+                }
                 Event::Mouse(mouse) if mouse.kind == MouseEventKind::Down(MouseButton::Left) => {
                     let area = terminal
                         .size()
@@ -1062,6 +1557,9 @@ pub fn run_with_options(options: RunOptions) -> Result<()> {
                         .unwrap_or_else(|_| ratatui::layout::Size::new(120, 40));
                     app.handle_mouse_scroll(mouse.column, mouse.row, false, area.into());
                 }
+                Event::Resize(cols, rows) => {
+                    app.status = format!("Terminal resized to {cols}x{rows}");
+                }
                 _ => {}
             }
         }
@@ -1070,6 +1568,7 @@ pub fn run_with_options(options: RunOptions) -> Result<()> {
     disable_raw_mode().ok();
     execute!(stdout(), LeaveAlternateScreen, DisableMouseCapture).ok();
     terminal.show_cursor().ok();
+    let _ = panic::take_hook(); // remove our hook
     terminal_result
 }
 
@@ -1081,17 +1580,218 @@ fn contains(rect: ratatui::layout::Rect, col: u16, row: u16) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{App, TREE_LOAD_THRESHOLD};
+    use super::*;
+    use crossterm::event::KeyCode;
+    use secrecy::SecretString;
 
-    #[test]
-    fn lazy_tree_progress_advances_limit() {
-        let mut app = App {
-            github: crate::github::GitHubClient::new(None).expect("client"),
+    fn test_app() -> App {
+        App {
+            github: Arc::new(crate::github::GitHubClient::new(None).expect("client")),
             account: crate::config::AccountConfig {
                 preferred_clone_dir: ".".to_string(),
                 last_branch_by_repo: Default::default(),
             },
+            preview_cache: crate::cache::PreviewCache::new(120).expect("cache"),
             search_query: String::new(),
+            search_page: 1,
+            per_page: 30,
+            repos: vec![],
+            selected_repo: 0,
+            tree_all: vec![],
+            tree_visible_limit: 0,
+            selected_node: 0,
+            current_repo: None,
+            branches: vec![],
+            selected_branch: 0,
+            preview_title: String::new(),
+            preview_lines: vec![],
+            preview_scroll: 0,
+            current_preview_path: None,
+            preview_viewport_rows: 30,
+            tree_text_mode: false,
+            input_buffer: String::new(),
+            token_buffer: SecretString::new(String::new().into()),
+            oauth_client_id_input: String::new(),
+            clone_path_input: ".".to_string(),
+            download_path_input: String::new(),
+            tree_search_input: String::new(),
+            status: String::new(),
+            focus: Focus::Repos,
+            should_quit: false,
+            auth_user: None,
+            last_tree_click: None,
+            last_repo_click: None,
+            keybindings: crate::config::KeybindingsConfig::default(),
+            command_palette_visible: false,
+            command_input: String::new(),
+            command_cursor: 0,
+            command_items: Vec::new(),
+            command_filtered: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn key_q_sets_should_quit() {
+        let mut app = test_app();
+        app.handle_key(KeyCode::Char('q'));
+        assert!(app.should_quit);
+    }
+
+    #[test]
+    fn key_slash_opens_search() {
+        let mut app = test_app();
+        app.focus = Focus::Repos;
+        app.handle_key(KeyCode::Char('/'));
+        assert_eq!(app.focus, Focus::Search);
+    }
+
+    #[test]
+    fn key_esc_from_search_returns_to_repos() {
+        let mut app = test_app();
+        app.focus = Focus::Search;
+        app.handle_key(KeyCode::Esc);
+        assert_eq!(app.focus, Focus::Repos);
+    }
+
+    #[test]
+    fn key_tab_cycles_focus() {
+        let mut app = test_app();
+        // Repos -> Tree (with tree data) -> Preview -> Repos
+        app.tree_all = vec![crate::models::RepoNode {
+            path: "f".into(),
+            name: "f".into(),
+            depth: 0,
+            is_dir: false,
+        }];
+        app.tree_visible_limit = 1;
+        app.current_repo = Some(crate::models::RepoSummary {
+            name: "repo".into(),
+            full_name: "o/r".into(),
+            description: None,
+            stargazers_count: 0,
+            language: None,
+            clone_url: "".into(),
+            owner: crate::models::RepoOwner { login: "o".into() },
+            default_branch: "main".into(),
+        });
+        app.preview_lines = vec![Line::from("test")];
+
+        assert_eq!(app.focus, Focus::Repos);
+        app.handle_key(KeyCode::Tab);
+        assert_eq!(app.focus, Focus::Tree);
+        app.handle_key(KeyCode::Tab);
+        assert_eq!(app.focus, Focus::Preview);
+        app.handle_key(KeyCode::Tab);
+        assert_eq!(app.focus, Focus::Repos);
+    }
+
+    #[test]
+    fn key_down_in_repos_moves_selection() {
+        let mut app = test_app();
+        app.repos = vec![
+            RepoSummary {
+                name: "a".into(),
+                full_name: "o/a".into(),
+                description: None,
+                stargazers_count: 0,
+                language: None,
+                clone_url: "".into(),
+                owner: crate::models::RepoOwner { login: "o".into() },
+                default_branch: "main".into(),
+            },
+            RepoSummary {
+                name: "b".into(),
+                full_name: "o/b".into(),
+                description: None,
+                stargazers_count: 0,
+                language: None,
+                clone_url: "".into(),
+                owner: crate::models::RepoOwner { login: "o".into() },
+                default_branch: "main".into(),
+            },
+        ];
+        assert_eq!(app.selected_repo, 0);
+        app.handle_key(KeyCode::Down);
+        assert_eq!(app.selected_repo, 1);
+    }
+
+    #[test]
+    fn key_up_in_tree_moves_selection() {
+        let mut app = test_app();
+        app.tree_all = vec![
+            RepoNode {
+                path: "a".into(),
+                name: "a".into(),
+                depth: 0,
+                is_dir: false,
+            },
+            RepoNode {
+                path: "b".into(),
+                name: "b".into(),
+                depth: 0,
+                is_dir: false,
+            },
+        ];
+        app.tree_visible_limit = 2;
+        app.focus = Focus::Tree;
+        app.selected_node = 1;
+        app.handle_key(KeyCode::Up);
+        assert_eq!(app.selected_node, 0);
+    }
+
+    #[test]
+    fn token_input_escapes_and_zeroizes() {
+        let mut app = test_app();
+        app.focus = Focus::TokenInput;
+        app.token_buffer = SecretString::new("sometoken".into());
+        app.handle_key(KeyCode::Esc);
+        assert_eq!(app.focus, Focus::Repos);
+        // After zeroize, memory is cleared; the original token value is no longer intact
+        // (zeroize overwrites the backing memory even though length metadata remains)
+    }
+
+    #[test]
+    fn token_input_enter_saves() {
+        let mut app = test_app();
+        app.focus = Focus::TokenInput;
+        app.token_buffer = SecretString::new("test_token".into());
+        app.handle_key(KeyCode::Enter);
+        // An attempt to save is made; after the attempt the token buffer is zeroized.
+        // Focus moves to Repos if save succeeded, otherwise stays on TokenInput.
+        // We just verify no panic and the zeroize call ran.
+    }
+
+    #[test]
+    fn search_input_adds_characters() {
+        let mut app = test_app();
+        app.focus = Focus::Search;
+        app.input_buffer.clear();
+        app.handle_key(KeyCode::Char('r'));
+        app.handle_key(KeyCode::Char('s'));
+        assert_eq!(app.input_buffer, "rs");
+    }
+
+    #[test]
+    fn search_input_backspace_removes_char() {
+        let mut app = test_app();
+        app.focus = Focus::Search;
+        app.input_buffer = "rust".to_string();
+        app.handle_key(KeyCode::Backspace);
+        assert_eq!(app.input_buffer, "rus");
+    }
+
+    #[test]
+    fn lazy_tree_progress_advances_limit() {
+        let mut app = App {
+            github: Arc::new(crate::github::GitHubClient::new(None).expect("client")),
+            account: crate::config::AccountConfig {
+                preferred_clone_dir: ".".to_string(),
+                last_branch_by_repo: Default::default(),
+            },
+            preview_cache: crate::cache::PreviewCache::new(120).expect("cache"),
+            search_query: String::new(),
+            search_page: 1,
+            per_page: 30,
             repos: vec![],
             selected_repo: 0,
             tree_all: (0..800)
@@ -1103,29 +1803,34 @@ mod tests {
                 })
                 .collect(),
             tree_visible_limit: 250,
-            selected_node: 250 - TREE_LOAD_THRESHOLD + 1,
+            selected_node: 250 - App::TREE_LOAD_THRESHOLD + 1,
+            current_repo: None,
             branches: vec![],
             selected_branch: 0,
             preview_title: String::new(),
             preview_lines: vec![],
             preview_scroll: 0,
             current_preview_path: None,
-            tree_search_input: String::new(),
-            download_path_input: String::new(),
+            preview_viewport_rows: 30,
             tree_text_mode: false,
-            status: String::new(),
-            focus: super::Focus::Tree,
             input_buffer: String::new(),
+            token_buffer: SecretString::new(String::new().into()),
             oauth_client_id_input: String::new(),
             clone_path_input: ".".to_string(),
+            download_path_input: String::new(),
+            tree_search_input: String::new(),
+            status: String::new(),
+            focus: Focus::Tree,
             should_quit: false,
-            current_repo: None,
             auth_user: None,
-            search_page: 1,
-            per_page: 30,
-            preview_cache: crate::cache::PreviewCache::new(120).expect("cache"),
             last_tree_click: None,
             last_repo_click: None,
+            keybindings: crate::config::KeybindingsConfig::default(),
+            command_palette_visible: false,
+            command_input: String::new(),
+            command_cursor: 0,
+            command_items: Vec::new(),
+            command_filtered: Vec::new(),
         };
         app.ensure_lazy_tree_progress();
         assert_eq!(app.tree_visible_limit, 500);

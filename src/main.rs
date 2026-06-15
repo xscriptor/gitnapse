@@ -2,6 +2,7 @@ mod app;
 mod auth;
 mod cache;
 mod config;
+mod error;
 mod github;
 mod models;
 mod oauth;
