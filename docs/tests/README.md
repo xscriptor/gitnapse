@@ -17,7 +17,7 @@
 
 <h2 id="files" align="center">Test Files</h2>
 <ul>
-  <li><code>tests/github_search_tests.rs</code> - API behavior tests for general search and <code>@me</code> private-repo mode using mocked HTTP endpoints</li>
+  <li><code>src/github/mod.rs</code> (<code>mod integration_tests</code>) - API behavior tests for general search and <code>@me</code> private-repo mode using mocked HTTP endpoints</li>
   <li><code>tests/secure_store_tests.rs</code> - secret storage fallback and file-permission checks</li>
   <li><code>tests/auth_precedence_tests.rs</code> - authentication source precedence checks</li>
 </ul>

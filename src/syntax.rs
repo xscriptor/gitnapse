@@ -35,6 +35,11 @@ const KEYWORDS: &[&str] = &[
     "var",
 ];
 
+/// Highlights source code syntax for display in the TUI.
+///
+/// Applies keyword highlighting, string coloring, number coloring, and
+/// comment styling based on the file extension. The output is limited to
+/// `max_lines` lines.
 pub fn highlight_content(content: &str, path: &str, max_lines: usize) -> Vec<Line<'static>> {
     let ext = path
         .rsplit('.')
@@ -127,4 +132,101 @@ fn push_token(spans: &mut Vec<Span<'static>>, token: &str, in_string: bool) {
     }
 
     spans.push(Span::raw(token.to_string()));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::highlight_content;
+    use ratatui::style::{Color, Modifier, Style};
+
+    #[test]
+    fn highlights_rust_keyword_as_cyan_bold() {
+        let lines = highlight_content("fn main() {}\n", "main.rs", 10);
+        assert_eq!(lines.len(), 1);
+        let spans = &lines[0].spans;
+        assert!(spans.iter().any(|s| {
+            s.content == "fn"
+                && s.style
+                    == Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD)
+        }));
+    }
+
+    #[test]
+    fn highlights_string_as_yellow() {
+        let lines = highlight_content("let s = \"hello\";\n", "main.rs", 10);
+        assert_eq!(lines.len(), 1);
+        let spans = &lines[0].spans;
+        assert!(
+            spans
+                .iter()
+                .any(|s| s.content == "hello" && s.style == Style::default().fg(Color::Yellow))
+        );
+    }
+
+    #[test]
+    fn highlights_number_as_magenta() {
+        let lines = highlight_content("let x = 42;\n", "main.rs", 10);
+        let spans = &lines[0].spans;
+        assert!(
+            spans
+                .iter()
+                .any(|s| s.content == "42" && s.style == Style::default().fg(Color::Magenta))
+        );
+    }
+
+    #[test]
+    fn highlights_comment_as_green() {
+        let lines = highlight_content("// this is a comment\nlet x = 1;\n", "main.rs", 10);
+        assert_eq!(lines.len(), 2);
+        let spans = &lines[0].spans;
+        assert!(!spans.is_empty());
+        assert_eq!(spans[0].content, "// this is a comment");
+        assert_eq!(spans[0].style, Style::default().fg(Color::Green));
+    }
+
+    #[test]
+    fn python_comment_uses_hash_prefix() {
+        let lines = highlight_content("# python comment\n", "main.py", 10);
+        assert_eq!(lines.len(), 1);
+        let spans = &lines[0].spans;
+        assert_eq!(spans[0].style, Style::default().fg(Color::Green));
+    }
+
+    #[test]
+    fn respects_max_lines() {
+        let input = "a\nb\nc\nd\ne\n";
+        assert_eq!(highlight_content(input, "f.txt", 3).len(), 3);
+        assert_eq!(highlight_content(input, "f.txt", 10).len(), 5);
+    }
+
+    #[test]
+    fn keywords_highlighted_regardless_of_extension() {
+        let lines = highlight_content("fn main()", "Makefile", 10);
+        let spans = &lines[0].spans;
+        let keyword_style = Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD);
+        assert!(
+            spans
+                .iter()
+                .any(|s| s.content == "fn" && s.style == keyword_style)
+        );
+    }
+
+    #[test]
+    fn handles_empty_content() {
+        let lines = highlight_content("", "main.rs", 10);
+        assert!(lines.is_empty());
+    }
+
+    #[test]
+    fn highlights_comment_prefix_after_whitespace() {
+        let lines = highlight_content("  // indented comment\n", "main.rs", 10);
+        let spans = &lines[0].spans;
+        assert!(!spans.is_empty());
+        let comment_span = spans.iter().find(|s| s.content.contains("//")).unwrap();
+        assert_eq!(comment_span.style, Style::default().fg(Color::Green));
+    }
 }

@@ -4,6 +4,7 @@ use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
+use secrecy::ExposeSecret;
 
 #[derive(Debug, Clone, Copy)]
 pub struct PaneAreas {
@@ -53,7 +54,7 @@ pub fn compute_panes(area: Rect, has_repo_open: bool) -> Option<PaneAreas> {
     })
 }
 
-pub fn render(frame: &mut Frame<'_>, app: &App) {
+pub fn render(frame: &mut Frame<'_>, app: &mut App) {
     let nav_lines = theme::nav_hint_lines(usize::from(frame.area().width.saturating_sub(4)));
     let nav_height = (nav_lines.len() as u16).saturating_add(2).max(3);
     let chunks = Layout::default()
@@ -117,7 +118,7 @@ pub fn render(frame: &mut Frame<'_>, app: &App) {
     if app.focus == Focus::TokenInput {
         let area = centered_rect(frame.area(), 70, 20);
         frame.render_widget(Clear, area);
-        let masked = "*".repeat(app.input_buffer.chars().count());
+        let masked = "*".repeat(app.token_buffer.expose_secret().chars().count());
         let modal = Paragraph::new(masked).block(
             Block::default()
                 .title("GitHub Token (masked, Enter save, Esc cancel)")
@@ -182,6 +183,49 @@ pub fn render(frame: &mut Frame<'_>, app: &App) {
         );
         frame.render_widget(modal, area);
     }
+
+    if app.command_palette_visible {
+        let area = centered_rect(frame.area(), 60, 60);
+        frame.render_widget(Clear, area);
+
+        let items = {
+            let list = if app.command_input.is_empty() {
+                &app.command_items
+            } else {
+                &app.command_filtered
+            };
+            if list.is_empty() {
+                vec![ListItem::new(Line::from(" No matching commands"))]
+            } else {
+                list.iter()
+                    .enumerate()
+                    .map(|(i, cmd)| {
+                        let style = if i == app.command_cursor {
+                            theme::selection_style(i)
+                        } else {
+                            Style::default()
+                        };
+                        ListItem::new(Line::from(Span::styled(format!(" {}", cmd), style)))
+                    })
+                    .collect()
+            }
+        };
+
+        let inner = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(3), Constraint::Min(5)])
+            .split(area);
+
+        let search_input = Paragraph::new(app.command_input.clone()).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Command Palette (Ctrl+P, type to filter, Enter to execute)"),
+        );
+        frame.render_widget(search_input, inner[0]);
+
+        let list_widget = List::new(items).block(Block::default().borders(Borders::NONE));
+        frame.render_widget(list_widget, inner[1]);
+    }
 }
 
 fn render_repo_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
@@ -236,7 +280,7 @@ fn render_repo_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
     frame.render_widget(List::new(items).block(block), area);
 }
 
-fn render_repo_view(frame: &mut Frame<'_>, app: &App, area: Rect) {
+fn render_repo_view(frame: &mut Frame<'_>, app: &mut App, area: Rect) {
     let show_side_preview = area.width >= 120;
 
     if show_side_preview {
@@ -244,15 +288,17 @@ fn render_repo_view(frame: &mut Frame<'_>, app: &App, area: Rect) {
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(45), Constraint::Percentage(55)])
             .split(area);
-        render_tree(frame, app, sections[0]);
-        render_preview(frame, app, sections[1]);
+        app.preview_viewport_rows = usize::from(sections[1].height.saturating_sub(2)).max(1);
+        render_tree(frame, &*app, sections[0]);
+        render_preview(frame, &*app, sections[1]);
     } else {
         let sections = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Percentage(55), Constraint::Percentage(45)])
             .split(area);
-        render_tree(frame, app, sections[0]);
-        render_preview(frame, app, sections[1]);
+        app.preview_viewport_rows = usize::from(sections[1].height.saturating_sub(2)).max(1);
+        render_tree(frame, &*app, sections[0]);
+        render_preview(frame, &*app, sections[1]);
     }
 }
 
@@ -276,7 +322,7 @@ fn render_tree(frame: &mut Frame<'_>, app: &App, area: Rect) {
             } else {
                 " "
             };
-            let indent = "  ".repeat(entry.depth.min(8));
+            let indent = "  ".repeat(entry.depth.min(20));
             let icon = if entry.is_dir { "[D]" } else { "[F]" };
             let text = format!("{marker} {indent}{icon} {}", entry.name);
             let style = if absolute == app.selected_node {

@@ -1,12 +1,4 @@
-#![allow(dead_code)]
-
-#[path = "../src/auth.rs"]
-mod auth;
-#[path = "../src/oauth_session.rs"]
-mod oauth_session;
-#[path = "../src/secure_store.rs"]
-mod secure_store;
-
+use gitnapse::auth;
 use serial_test::serial;
 
 #[test]

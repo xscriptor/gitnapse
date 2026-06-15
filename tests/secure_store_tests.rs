@@ -1,8 +1,4 @@
-#![allow(dead_code)]
-
-#[path = "../src/secure_store.rs"]
-mod secure_store;
-
+use gitnapse::secure_store;
 use serial_test::serial;
 use tempfile::tempdir;
 

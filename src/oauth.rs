@@ -2,10 +2,22 @@ use crate::auth;
 use crate::github::GitHubClient;
 use crate::oauth_session;
 use anyhow::{Context, Result, anyhow};
-use http::header::ACCEPT;
+use reqwest::header::ACCEPT;
 use secrecy::{ExposeSecret, SecretString};
 use std::process::Command;
+use std::sync::OnceLock;
 use std::time::Duration;
+use tokio::runtime::Runtime;
+
+fn get_runtime() -> &'static Runtime {
+    static RUNTIME: OnceLock<Runtime> = OnceLock::new();
+    RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Cannot create tokio runtime")
+    })
+}
 
 const ENV_OAUTH_CLIENT_ID: &str = "GITNAPSE_GITHUB_OAUTH_CLIENT_ID";
 const ENV_GITHUB_CLIENT_ID: &str = "GITHUB_CLIENT_ID";
@@ -41,9 +53,11 @@ fn terminal_hyperlink(url: &str) -> String {
 }
 
 fn ensure_rustls_crypto_provider() {
-    // Some environments cannot auto-select rustls provider at runtime.
-    let _ =
-        rustls::crypto::CryptoProvider::install_default(rustls::crypto::ring::default_provider());
+    if rustls::crypto::CryptoProvider::install_default(rustls::crypto::ring::default_provider())
+        .is_err()
+    {
+        eprintln!("Warning: could not install rustls crypto provider (may already be set)");
+    }
 }
 
 fn try_open_browser(url: &str) -> bool {
@@ -90,11 +104,8 @@ pub fn oauth_device_login_cli(
             .collect::<Vec<_>>()
     };
 
-    let client_secret = SecretString::new(client_id.clone().into());
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .context("Cannot initialize async runtime for OAuth flow")?;
+    let device_credential = SecretString::new(client_id.clone().into());
+    let runtime = get_runtime();
 
     let (crab, device_codes) = runtime
         .block_on(async {
@@ -106,7 +117,7 @@ pub fn oauth_device_login_cli(
                 .context("Cannot create OAuth client")?;
 
             let device_codes = crab
-                .authenticate_as_device(&client_secret, scopes.iter().map(String::as_str))
+                .authenticate_as_device(&device_credential, scopes.iter().map(String::as_str))
                 .await
                 .context("Unable to request OAuth device codes from GitHub")?;
             Ok::<_, anyhow::Error>((crab, device_codes))
@@ -136,7 +147,7 @@ pub fn oauth_device_login_cli(
         .block_on(async {
             tokio::time::timeout(
                 timeout,
-                device_codes.poll_until_available(&crab, &client_secret),
+                device_codes.poll_until_available(&crab, &device_credential),
             )
             .await
         })

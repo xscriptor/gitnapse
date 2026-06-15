@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -37,6 +38,7 @@ pub struct TreeEntry {
     pub path: String,
     #[serde(rename = "type")]
     pub kind: String,
+    pub sha: String,
 }
 
 #[derive(Debug, Clone)]
@@ -47,8 +49,9 @@ pub struct RepoNode {
     pub is_dir: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ContentResponse {
+    pub sha: String,
     pub content: String,
     pub encoding: String,
 }

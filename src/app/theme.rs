@@ -1,32 +1,64 @@
+use crate::config::{ThemeConfig, strip_jsonc_comments};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
+use std::sync::OnceLock;
 
-const PALETTE: [(u8, u8, u8); 16] = [
-    (0x36, 0x35, 0x37),
-    (0xfc, 0x61, 0x8d),
-    (0x7b, 0xd8, 0x8f),
-    (0xfc, 0xe5, 0x66),
-    (0xfd, 0x93, 0x53),
-    (0x94, 0x8a, 0xe3),
-    (0x5a, 0xd4, 0xe6),
-    (0xf7, 0xf1, 0xff),
-    (0x69, 0x67, 0x6c),
-    (0xfc, 0x61, 0x8d),
-    (0x7b, 0xd8, 0x8f),
-    (0xfc, 0xe5, 0x66),
-    (0xfd, 0x93, 0x53),
-    (0x94, 0x8a, 0xe3),
-    (0x5a, 0xd4, 0xe6),
-    (0xf7, 0xf1, 0xff),
+const DEFAULT_PALETTE: [[u8; 3]; 16] = [
+    [0x36, 0x35, 0x37],
+    [0xfc, 0x61, 0x8d],
+    [0x7b, 0xd8, 0x8f],
+    [0xfc, 0xe5, 0x66],
+    [0xfd, 0x93, 0x53],
+    [0x94, 0x8a, 0xe3],
+    [0x5a, 0xd4, 0xe6],
+    [0xf7, 0xf1, 0xff],
+    [0x69, 0x67, 0x6c],
+    [0xfc, 0x61, 0x8d],
+    [0x7b, 0xd8, 0x8f],
+    [0xfc, 0xe5, 0x66],
+    [0xfd, 0x93, 0x53],
+    [0x94, 0x8a, 0xe3],
+    [0x5a, 0xd4, 0xe6],
+    [0xf7, 0xf1, 0xff],
 ];
+
+static PALETTE: OnceLock<Vec<[u8; 3]>> = OnceLock::new();
+
+pub fn init_theme(config: &ThemeConfig) {
+    let _ = PALETTE.set(config.palette.clone());
+}
+
+#[allow(dead_code)]
+pub fn load_theme_by_name(name: &str) -> ThemeConfig {
+    let dir = match crate::config::config_dir() {
+        Ok(d) => d.join("themes"),
+        Err(_) => return ThemeConfig::default(),
+    };
+    let path = dir.join(format!("{name}.jsonc"));
+    if path.exists()
+        && let Ok(raw) = std::fs::read_to_string(&path)
+    {
+        let cleaned = strip_jsonc_comments(&raw);
+        if let Ok(cfg) = serde_json::from_str(&cleaned) {
+            return cfg;
+        }
+    }
+    ThemeConfig::default()
+}
+
+fn palette() -> &'static Vec<[u8; 3]> {
+    PALETTE.get_or_init(|| DEFAULT_PALETTE.to_vec())
+}
 
 #[cfg(test)]
 pub fn palette_len() -> usize {
-    PALETTE.len()
+    palette().len()
 }
 
 fn palette_rgb(index: usize) -> (u8, u8, u8) {
-    PALETTE[index % PALETTE.len()]
+    let pal = palette();
+    let entry = pal[index % pal.len()];
+    (entry[0], entry[1], entry[2])
 }
 
 fn contrast_fg_from_rgb(rgb: (u8, u8, u8)) -> Color {

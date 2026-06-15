@@ -37,7 +37,7 @@ pub fn load_token() -> Result<Option<String>> {
     }
 
     let file = token_file()?;
-    secure_store::load_secret(TOKEN_SECRET_KEY, &file)
+    secure_store::load_secret(TOKEN_SECRET_KEY, &file).map_err(|e| anyhow!("{e}"))
 }
 
 pub fn save_token(token: &str) -> Result<()> {
@@ -47,14 +47,15 @@ pub fn save_token(token: &str) -> Result<()> {
     }
 
     let file = token_file()?;
-    let _ = secure_store::save_secret(TOKEN_SECRET_KEY, &file, token)?;
+    let _ =
+        secure_store::save_secret(TOKEN_SECRET_KEY, &file, token).map_err(|e| anyhow!("{e}"))?;
 
     Ok(())
 }
 
 pub fn clear_token() -> Result<()> {
     let file = token_file()?;
-    secure_store::clear_secret(TOKEN_SECRET_KEY, &file)?;
+    secure_store::clear_secret(TOKEN_SECRET_KEY, &file).map_err(|e| anyhow!("{e}"))?;
     let _ = oauth_session::clear_session();
     Ok(())
 }
@@ -81,18 +82,10 @@ pub fn clear_token_cli() -> Result<()> {
 }
 
 pub fn status_cli() -> Result<()> {
-    let env_ok = std::env::var(ENV_TOKEN)
-        .ok()
-        .filter(|t| !t.trim().is_empty())
-        .is_some();
-    let oauth_client_id_ok = std::env::var(ENV_OAUTH_CLIENT_ID)
-        .ok()
-        .filter(|t| !t.trim().is_empty())
-        .is_some();
-    let github_client_id_ok = std::env::var(ENV_GITHUB_CLIENT_ID)
-        .ok()
-        .filter(|t| !t.trim().is_empty())
-        .is_some();
+    let env_ok = std::env::var(ENV_TOKEN).is_ok_and(|t| !t.trim().is_empty());
+    let oauth_client_id_ok = std::env::var(ENV_OAUTH_CLIENT_ID).is_ok_and(|t| !t.trim().is_empty());
+    let github_client_id_ok =
+        std::env::var(ENV_GITHUB_CLIENT_ID).is_ok_and(|t| !t.trim().is_empty());
     let file = token_file()?;
     let file_ok = file.exists();
     let oauth_session_ok = oauth_session::load_session()?.is_some();

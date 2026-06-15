@@ -1,14 +1,26 @@
 use crate::secure_store;
 use anyhow::{Context, Result, anyhow};
 use directories::ProjectDirs;
-use reqwest::blocking::Client;
+use reqwest::Client;
 use reqwest::header::{ACCEPT, CONTENT_TYPE, HeaderMap, HeaderValue, USER_AGENT};
 use secrecy::ExposeSecret;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::runtime::Runtime;
 use url::form_urlencoded::Serializer;
+
+fn get_runtime() -> &'static Runtime {
+    static RUNTIME: OnceLock<Runtime> = OnceLock::new();
+    RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Cannot create tokio runtime for oauth_session")
+    })
+}
 
 const SESSION_FILE: &str = "oauth_session.json";
 const SESSION_SECRET_KEY: &str = "oauth_session_json";
@@ -153,60 +165,67 @@ fn try_refresh(session: &OAuthSession) -> Result<Option<OAuthSession>> {
         return Ok(None);
     };
 
-    let mut headers = HeaderMap::new();
-    headers.insert(USER_AGENT, HeaderValue::from_static("gitnapse/0.1"));
-    headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
+    let client_id = session.client_id.clone();
+    let refresh_token = refresh_token.clone();
 
-    let client = Client::builder()
-        .default_headers(headers)
-        .build()
-        .context("Cannot build OAuth refresh HTTP client")?;
+    get_runtime().block_on(async {
+        let mut headers = HeaderMap::new();
+        headers.insert(USER_AGENT, HeaderValue::from_static("gitnapse/0.1"));
+        headers.insert(ACCEPT, HeaderValue::from_static("application/json"));
 
-    let body = Serializer::new(String::new())
-        .append_pair("client_id", session.client_id.as_str())
-        .append_pair("client_secret", client_secret.as_str())
-        .append_pair("grant_type", "refresh_token")
-        .append_pair("refresh_token", refresh_token.as_str())
-        .finish();
+        let client = Client::builder()
+            .default_headers(headers)
+            .build()
+            .context("Cannot build OAuth refresh HTTP client")?;
 
-    let response = client
-        .post("https://github.com/login/oauth/access_token")
-        .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
-        .body(body)
-        .send()
-        .context("OAuth refresh request failed")?;
+        let body = Serializer::new(String::new())
+            .append_pair("client_id", &client_id)
+            .append_pair("client_secret", &client_secret)
+            .append_pair("grant_type", "refresh_token")
+            .append_pair("refresh_token", &refresh_token)
+            .finish();
 
-    if !response.status().is_success() {
-        return Ok(None);
-    }
-    let wire: RefreshWire = response.json().context("Invalid OAuth refresh response")?;
-    if wire.error.is_some() {
-        return Ok(None);
-    }
-    let Some(access_token) = wire.access_token.filter(|s| !s.trim().is_empty()) else {
-        return Ok(None);
-    };
+        let response = client
+            .post("https://github.com/login/oauth/access_token")
+            .header(CONTENT_TYPE, "application/x-www-form-urlencoded")
+            .body(body)
+            .send()
+            .await
+            .context("OAuth refresh request failed")?;
 
-    let scope = wire
-        .scope
-        .unwrap_or_default()
-        .split(',')
-        .filter(|s| !s.trim().is_empty())
-        .map(|s| s.trim().to_string())
-        .collect::<Vec<_>>();
+        if !response.status().is_success() {
+            return Ok(None);
+        }
+        let wire: RefreshWire = response
+            .json()
+            .await
+            .context("Invalid OAuth refresh response")?;
+        if wire.error.is_some() {
+            return Ok(None);
+        }
+        let Some(access_token) = wire.access_token.clone().filter(|s| !s.trim().is_empty()) else {
+            return Ok(None);
+        };
 
-    let now = now_unix();
-    Ok(Some(OAuthSession {
-        access_token,
-        token_type: wire.token_type.unwrap_or_else(|| "bearer".to_string()),
-        scope,
-        expires_at_unix: wire.expires_in.map(|s| now.saturating_add(s)),
-        refresh_token: wire
-            .refresh_token
-            .or_else(|| Some(refresh_token.to_string())),
-        refresh_expires_at_unix: wire.refresh_token_expires_in.map(|s| now.saturating_add(s)),
-        client_id: session.client_id.clone(),
-    }))
+        let scope = wire
+            .scope
+            .unwrap_or_default()
+            .split(',')
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| s.trim().to_string())
+            .collect::<Vec<_>>();
+
+        let now = now_unix();
+        Ok(Some(OAuthSession {
+            access_token,
+            token_type: wire.token_type.unwrap_or_else(|| "bearer".to_string()),
+            scope,
+            expires_at_unix: wire.expires_in.map(|s| now.saturating_add(s)),
+            refresh_token: wire.refresh_token.or(Some(refresh_token)),
+            refresh_expires_at_unix: wire.refresh_token_expires_in.map(|s| now.saturating_add(s)),
+            client_id,
+        }))
+    })
 }
 
 #[cfg(test)]
