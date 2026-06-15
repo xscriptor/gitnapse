@@ -28,6 +28,15 @@ use std::time::{Duration, Instant};
 const TREE_PAGE_SIZE: usize = 250;
 const TREE_LOAD_THRESHOLD: usize = 15;
 
+struct TerminalGuard;
+
+impl Drop for TerminalGuard {
+    fn drop(&mut self) {
+        let _ = enable_raw_mode();
+        let _ = execute!(stdout(), EnterAlternateScreen, EnableMouseCapture);
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct RunOptions {
     pub initial_query: String,
@@ -326,16 +335,27 @@ impl App {
         }
 
         match self.github.fetch_file_content(&full_name, &node_path) {
-            Ok(content) => {
-                self.preview_cache
-                    .put(&full_name, &branch, &node_path, &content);
-                self.preview_title = format!("{}/{}", full_name, node_path);
-                self.preview_lines = highlight_content(&content, &node_path, 300);
-                self.preview_scroll = 0;
-                self.current_preview_path = Some(node_path.clone());
-                self.tree_text_mode = false;
-                self.status = format!("Preview loaded for {}", node_path);
-            }
+            Ok(bytes) => match String::from_utf8(bytes) {
+                Ok(content) => {
+                    self.preview_cache
+                        .put(&full_name, &branch, &node_path, &content);
+                    self.preview_title = format!("{}/{}", full_name, node_path);
+                    self.preview_lines = highlight_content(&content, &node_path, 300);
+                    self.preview_scroll = 0;
+                    self.current_preview_path = Some(node_path.clone());
+                    self.tree_text_mode = false;
+                    self.status = format!("Preview loaded for {}", node_path);
+                }
+                Err(_) => {
+                    self.preview_title = format!("{}/{}", full_name, node_path);
+                    self.preview_lines =
+                        vec![Line::from("Binary file. Use 'd' to download.")];
+                    self.preview_scroll = 0;
+                    self.current_preview_path = None;
+                    self.tree_text_mode = false;
+                    self.status = format!("Binary file: {}", node_path);
+                }
+            },
             Err(error) => {
                 self.status = format!("Preview failed: {error}");
             }
@@ -676,12 +696,12 @@ impl App {
         // Temporarily leave TUI mode to let user interact with OAuth instructions in terminal.
         let _ = disable_raw_mode();
         let _ = execute!(stdout(), LeaveAlternateScreen, DisableMouseCapture);
+        let guard = TerminalGuard;
 
         let oauth_result =
             oauth::oauth_device_login_cli(client_id, vec!["read:user".to_string()], 900);
 
-        let _ = enable_raw_mode();
-        let _ = execute!(stdout(), EnterAlternateScreen, EnableMouseCapture);
+        drop(guard);
 
         match oauth_result {
             Ok(()) => {

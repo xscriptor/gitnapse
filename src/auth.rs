@@ -82,17 +82,11 @@ pub fn clear_token_cli() -> Result<()> {
 
 pub fn status_cli() -> Result<()> {
     let env_ok = std::env::var(ENV_TOKEN)
-        .ok()
-        .filter(|t| !t.trim().is_empty())
-        .is_some();
+        .is_ok_and(|t| !t.trim().is_empty());
     let oauth_client_id_ok = std::env::var(ENV_OAUTH_CLIENT_ID)
-        .ok()
-        .filter(|t| !t.trim().is_empty())
-        .is_some();
+        .is_ok_and(|t| !t.trim().is_empty());
     let github_client_id_ok = std::env::var(ENV_GITHUB_CLIENT_ID)
-        .ok()
-        .filter(|t| !t.trim().is_empty())
-        .is_some();
+        .is_ok_and(|t| !t.trim().is_empty());
     let file = token_file()?;
     let file_ok = file.exists();
     let oauth_session_ok = oauth_session::load_session()?.is_some();

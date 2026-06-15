@@ -90,7 +90,7 @@ pub fn oauth_device_login_cli(
             .collect::<Vec<_>>()
     };
 
-    let client_secret = SecretString::new(client_id.clone().into());
+    let device_credential = SecretString::new(client_id.clone().into());
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -106,7 +106,7 @@ pub fn oauth_device_login_cli(
                 .context("Cannot create OAuth client")?;
 
             let device_codes = crab
-                .authenticate_as_device(&client_secret, scopes.iter().map(String::as_str))
+                .authenticate_as_device(&device_credential, scopes.iter().map(String::as_str))
                 .await
                 .context("Unable to request OAuth device codes from GitHub")?;
             Ok::<_, anyhow::Error>((crab, device_codes))
@@ -136,7 +136,7 @@ pub fn oauth_device_login_cli(
         .block_on(async {
             tokio::time::timeout(
                 timeout,
-                device_codes.poll_until_available(&crab, &client_secret),
+                device_codes.poll_until_available(&crab, &device_credential),
             )
             .await
         })

@@ -1,11 +1,4 @@
-#![allow(dead_code)]
-
-#[path = "../src/github.rs"]
-mod github;
-#[path = "../src/models.rs"]
-mod models;
-
-use github::GitHubClient;
+use gitnapse::github::GitHubClient;
 use mockito::{Matcher, Server};
 use serial_test::serial;
 

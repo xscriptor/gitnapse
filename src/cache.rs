@@ -1,8 +1,8 @@
 use anyhow::{Context, Result, anyhow};
 use directories::ProjectDirs;
-use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
+use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime};
 
@@ -61,12 +61,9 @@ impl PreviewCache {
 }
 
 fn cache_key(repo: &str, branch: &str, path: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(repo.as_bytes());
-    hasher.update(b"::");
-    hasher.update(branch.as_bytes());
-    hasher.update(b"::");
-    hasher.update(path.as_bytes());
-    let digest = hasher.finalize();
-    digest.iter().map(|b| format!("{b:02x}")).collect()
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    repo.hash(&mut hasher);
+    branch.hash(&mut hasher);
+    path.hash(&mut hasher);
+    format!("{:x}", hasher.finish())
 }

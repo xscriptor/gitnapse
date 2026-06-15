@@ -143,8 +143,8 @@ pub fn load_secret(secret_key: &str, fallback_file: &Path) -> Result<Option<Stri
 }
 
 pub fn clear_secret(secret_key: &str, fallback_file: &Path) -> Result<()> {
-    if let Some(result) = keyring_delete(secret_key) {
-        let _ = result;
+    if let Some(Err(e)) = keyring_delete(secret_key) {
+        eprintln!("Warning: failed to clear keyring secret: {e}");
     }
     file_delete(fallback_file)
 }

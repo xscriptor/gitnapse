@@ -267,7 +267,7 @@ impl GitHubClient {
         Ok(nodes)
     }
 
-    pub fn fetch_file_content(&self, full_name: &str, path: &str) -> Result<String> {
+    pub fn fetch_file_content(&self, full_name: &str, path: &str) -> Result<Vec<u8>> {
         self.fetch_file_content_by_ref(full_name, path, "")
     }
 
@@ -276,7 +276,7 @@ impl GitHubClient {
         full_name: &str,
         path: &str,
         git_ref: &str,
-    ) -> Result<String> {
+    ) -> Result<Vec<u8>> {
         let api_base = Self::api_base();
         let url = if git_ref.trim().is_empty() {
             format!("{api_base}/repos/{full_name}/contents/{path}")
@@ -309,8 +309,7 @@ impl GitHubClient {
         let bytes = base64::engine::general_purpose::STANDARD
             .decode(normalized)
             .context("Cannot decode base64 file content")?;
-        let text = String::from_utf8_lossy(&bytes).to_string();
-        Ok(text)
+        Ok(bytes)
     }
 
     pub fn fetch_authenticated_user(&self) -> Result<Option<String>> {

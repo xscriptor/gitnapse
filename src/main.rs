@@ -146,7 +146,7 @@ fn download_file_cli(args: DownloadFileArgs) -> Result<()> {
     let token = auth::load_token()?;
     let client = github::GitHubClient::new(token.as_deref())?;
 
-    let content = match args.r#ref {
+    let bytes = match args.r#ref {
         Some(branch) if !branch.trim().is_empty() => {
             // Contents API supports a ref query; fallback by branch tree/content path behavior
             client.fetch_file_content_by_ref(&args.repo, &args.path, &branch)?
@@ -159,7 +159,7 @@ fn download_file_cli(args: DownloadFileArgs) -> Result<()> {
     {
         fs::create_dir_all(parent)?;
     }
-    fs::write(&args.out, content)?;
+    fs::write(&args.out, bytes)?;
     println!(
         "Downloaded {}:{} -> {}",
         args.repo,
