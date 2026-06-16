@@ -23,68 +23,70 @@ jobs:
   build:
     name: Build (${{ matrix.target }})
     runs-on: ${{ matrix.runs-on }}
-    container: ${{ matrix.container }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - target: linux-ubuntu
+          - target: linux-x86_64
+            platform: linux
             runs-on: ubuntu-latest
-            container: cimg/rust:1.96
-            arch: amd64
-            shell: bash
-
-          - target: linux-fedora
-            runs-on: ubuntu-latest
-            container: fedora:latest
             arch: x86_64
-            shell: bash
-
-          - target: linux-arch
-            runs-on: ubuntu-latest
-            container: rnestler/archlinux-rust:stable
-            arch: x86_64
-            shell: bash
+            target_triple: x86_64-unknown-linux-musl
 
           - target: windows
+            platform: windows
             runs-on: windows-latest
             arch: x86_64
-            shell: pwsh
-
-          - target: macos-x86_64
-            runs-on: macos-13
-            arch: x86_64
-            shell: bash
 
           - target: macos-arm64
-            runs-on: macos-14
+            platform: macos
+            runs-on: macos-latest
             arch: arm64
-            shell: bash
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
       - name: Setup Rust toolchain
         if: matrix.container == ''
         uses: actions-rust-lang/setup-rust-toolchain@v1
 
-      - name: Setup
-        shell: ${{ matrix.shell }}
+      - name: Setup (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
         env:
           ARCH: ${{ matrix.arch }}
-        run: ./.github/scripts/setup-${{ matrix.target }}.${{ matrix.shell == 'pwsh' && 'ps1' || 'sh' }}
+        run: bash .github/scripts/setup-${{ matrix.platform }}.sh
 
-      - name: Checkout
-        uses: actions/checkout@v5
+      - name: Setup (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: .github/scripts/setup-${{ matrix.platform }}.ps1
 
       - name: Build
-        shell: ${{ matrix.shell }}
-        run: cargo build --release --locked
+        shell: bash
+        run: |
+          if [ -n "${{ matrix.target_triple }}" ]; then
+            cargo build --release --locked --target ${{ matrix.target_triple }}
+          else
+            cargo build --release --locked
+          fi
 
-      - name: Package
-        id: package
-        shell: ${{ matrix.shell }}
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
         env:
           ARCH: ${{ matrix.arch }}
-        run: ./.github/scripts/package-${{ matrix.target }}.${{ matrix.shell == 'pwsh' && 'ps1' || 'sh' }}
+        run: bash .github/scripts/package-${{ matrix.platform }}.sh
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: .github/scripts/package-${{ matrix.platform }}.ps1
 
       - name: Upload artifact
         uses: actions/upload-artifact@v5
@@ -95,6 +97,7 @@ jobs:
           retention-days: 7
 
   publish-release:
+    if: false
     name: Publish GitHub Release
     runs-on: ubuntu-latest
     needs:
