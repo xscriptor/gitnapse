@@ -25,6 +25,7 @@ use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
 use ratatui::text::Line;
 use secrecy::SecretString;
+use std::collections::HashSet;
 use std::io::stdout;
 use std::panic;
 use std::path::PathBuf;
@@ -48,14 +49,15 @@ pub(crate) enum NetworkEvent {
     PrCommitsResult(Result<Vec<CommitInfo>, String>),
     PrMergeResult(Result<MergeResponse, String>),
     PrActionResult(String),
+    WorkflowRunsResult(Vec<crate::models::WorkflowRun>),
 }
 
 struct TerminalGuard;
 
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
-        let _ = enable_raw_mode();
-        let _ = execute!(stdout(), EnterAlternateScreen, EnableMouseCapture);
+        let _ = disable_raw_mode();
+        let _ = execute!(stdout(), LeaveAlternateScreen, DisableMouseCapture);
     }
 }
 
@@ -134,13 +136,13 @@ pub struct App {
     pub focus: Focus,
     pub should_quit: bool,
     pub auth_user: Option<String>,
+    pub multi_selected_repos: HashSet<usize>,
 
     // Click tracking
     pub last_tree_click: Option<(usize, Instant)>,
     pub last_repo_click: Option<(usize, Instant)>,
 
     // Keybindings
-    #[allow(dead_code)]
     pub keybindings: KeybindingsConfig,
 
     // Command palette
@@ -214,8 +216,8 @@ impl App {
                     .map(|s| s.trim().is_empty())
                     .unwrap_or(true)
                 {
-                    eprintln!(
-                        "[gitnapse] Warning: No OAuth client ID found in GITNAPSE_GITHUB_OAUTH_CLIENT_ID or GITHUB_CLIENT_ID env vars. Using built-in default."
+                    log::warn!(
+                        "No OAuth client ID found in GITNAPSE_GITHUB_OAUTH_CLIENT_ID or GITHUB_CLIENT_ID env vars. Using built-in default."
                     );
                 }
                 client_id.unwrap_or_default().trim().to_string()
@@ -232,6 +234,7 @@ impl App {
             focus: Focus::Repos,
             should_quit: false,
             auth_user,
+            multi_selected_repos: HashSet::new(),
             last_tree_click: None,
             last_repo_click: None,
             keybindings,
@@ -431,6 +434,7 @@ mod tests {
             focus: Focus::Repos,
             should_quit: false,
             auth_user: None,
+            multi_selected_repos: HashSet::new(),
             last_tree_click: None,
             last_repo_click: None,
             keybindings: crate::config::KeybindingsConfig::default(),
@@ -643,6 +647,7 @@ mod tests {
             focus: Focus::Tree,
             should_quit: false,
             auth_user: None,
+            multi_selected_repos: HashSet::new(),
             last_tree_click: None,
             last_repo_click: None,
             keybindings: crate::config::KeybindingsConfig::default(),

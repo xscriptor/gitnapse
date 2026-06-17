@@ -99,6 +99,8 @@ pub struct CiArgs {
     pub repo: String,
     #[arg(short = 'b', long)]
     pub branch: Option<String>,
+    #[arg(short = 'w', long)]
+    pub workflows: bool,
 }
 
 #[derive(Debug, Clone, Args)]

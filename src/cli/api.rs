@@ -114,10 +114,28 @@ pub fn issue_close(repo: &str, number: u64) -> Result<()> {
 
 // ── CI Commands ─────────────────────────────────────────────────────────
 
-pub fn ci_status(repo: &str, branch: Option<&str>) -> Result<()> {
+pub fn ci_status(repo: &str, branch: Option<&str>, workflows: bool) -> Result<()> {
     let full_name = helpers::resolve_full_name(repo)?;
     let branch = branch.unwrap_or("main");
     let client = helpers::make_client()?;
+
+    if workflows {
+        let runs = client
+            .fetch_workflow_runs(&full_name, branch, 30)
+            .map_err(|e| anyhow!(helpers::handle_api_error(&full_name, &e)))?;
+        if runs.is_empty() {
+            println!("No workflow runs for {full_name} on {branch}");
+            return Ok(());
+        }
+        for run in &runs {
+            let conclusion = run
+                .conclusion
+                .as_deref()
+                .unwrap_or(run.status.as_str());
+            println!("  [{:>12}] {} ({})", conclusion, run.name, run.status);
+        }
+        return Ok(());
+    }
 
     let commits = client
         .fetch_recent_commits(&full_name, branch, 1)

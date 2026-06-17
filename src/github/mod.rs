@@ -60,7 +60,6 @@ pub(crate) struct MeQuery {
     pub(crate) languages: Vec<String>,
 }
 
-#[allow(dead_code)]
 impl GitHubClient {
     pub(crate) fn api_base() -> String {
         std::env::var("GITNAPSE_GITHUB_API")
@@ -131,13 +130,11 @@ impl GitHubClient {
     // ── Rate-limit helpers ──────────────────────────────────────────────
 
     /// Public read‑only accessor for the last known `x-ratelimit-remaining` value.
-    #[allow(dead_code)]
     pub fn rate_limit_remaining(&self) -> Option<u32> {
         *self.rate_limit_remaining.lock().unwrap()
     }
 
     /// Public read‑only accessor for the last known `x-ratelimit-reset` (Unix timestamp).
-    #[allow(dead_code)]
     pub fn rate_limit_reset(&self) -> Option<u64> {
         *self.rate_limit_reset.lock().unwrap()
     }

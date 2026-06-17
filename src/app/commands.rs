@@ -31,10 +31,18 @@ impl App {
             commands.push("List Pull Requests".to_string());
             commands.push("View Recent Commits".to_string());
             commands.push("View CI Status".to_string());
+            commands.push("View Workflow Runs".to_string());
             commands.push("View PR Detail".to_string());
             commands.push("Create Pull Request".to_string());
             commands.push("Compare Branches".to_string());
         }
+        if !self.multi_selected_repos.is_empty() {
+            commands.push(format!(
+                "Clone {} Selected Repos",
+                self.multi_selected_repos.len()
+            ));
+        }
+        commands.push("Change Theme".to_string());
         commands.push("Set Token".to_string());
         commands.push("Quit".to_string());
         self.command_items = commands;
@@ -46,62 +54,54 @@ impl App {
         tx: mpsc::Sender<NetworkEvent>,
         github: Arc<GitHubClient>,
     ) {
-        match code {
-            KeyCode::Esc => {
+        if self.keybindings.matches_key("escape", &code) {
+            self.command_palette_visible = false;
+        } else if self.keybindings.matches_key("enter", &code) {
+            let selected = self.get_selected_command();
+            if self.command_is_theme_picker {
+                if let Some(theme_name) = selected {
+                    let config = theme::load_theme_by_name(&theme_name);
+                    theme::init_theme(&config);
+                    self.status = format!("Theme changed to {theme_name}.");
+                }
                 self.command_palette_visible = false;
-            }
-            KeyCode::Enter => {
-                let selected = self.get_selected_command();
-                if self.command_is_theme_picker {
-                    if let Some(theme_name) = selected {
-                        let config = theme::load_theme_by_name(&theme_name);
-                        theme::init_theme(&config);
-                        self.status = format!("Theme changed to {theme_name}.");
-                    }
-                    self.command_palette_visible = false;
-                    self.command_is_theme_picker = false;
-                } else if self.command_is_pr_action {
-                    self.command_palette_visible = false;
-                    self.command_is_pr_action = false;
-                    if let Some(action) = selected {
-                        self.execute_pr_action(action, tx, github);
-                    }
-                } else {
-                    self.command_palette_visible = false;
-                    if let Some(cmd) = selected {
-                        self.execute_command(cmd, tx, github);
-                    }
+                self.command_is_theme_picker = false;
+            } else if self.command_is_pr_action {
+                self.command_palette_visible = false;
+                self.command_is_pr_action = false;
+                if let Some(action) = selected {
+                    self.execute_pr_action(action, tx, github);
+                }
+            } else {
+                self.command_palette_visible = false;
+                if let Some(cmd) = selected {
+                    self.execute_command(cmd, tx, github);
                 }
             }
-            KeyCode::Up => {
-                let count = if self.command_input.is_empty() {
-                    self.command_items.len()
-                } else {
-                    self.command_filtered.len()
-                };
-                if count > 0 {
-                    self.command_cursor = self.command_cursor.saturating_sub(1);
-                }
+        } else if self.keybindings.matches_key("scroll_up", &code) {
+            let count = if self.command_input.is_empty() {
+                self.command_items.len()
+            } else {
+                self.command_filtered.len()
+            };
+            if count > 0 {
+                self.command_cursor = self.command_cursor.saturating_sub(1);
             }
-            KeyCode::Down => {
-                let count = if self.command_input.is_empty() {
-                    self.command_items.len()
-                } else {
-                    self.command_filtered.len()
-                };
-                if count > 0 {
-                    self.command_cursor = (self.command_cursor + 1).min(count - 1);
-                }
+        } else if self.keybindings.matches_key("scroll_down", &code) {
+            let count = if self.command_input.is_empty() {
+                self.command_items.len()
+            } else {
+                self.command_filtered.len()
+            };
+            if count > 0 {
+                self.command_cursor = (self.command_cursor + 1).min(count - 1);
             }
-            KeyCode::Backspace => {
-                self.command_input.pop();
-                self.update_command_filter();
-            }
-            KeyCode::Char(ch) => {
-                self.command_input.push(ch);
-                self.update_command_filter();
-            }
-            _ => {}
+        } else if self.keybindings.matches_key("backspace", &code) {
+            self.command_input.pop();
+            self.update_command_filter();
+        } else if let KeyCode::Char(ch) = code {
+            self.command_input.push(ch);
+            self.update_command_filter();
         }
     }
 
@@ -224,6 +224,18 @@ impl App {
                     self.status = "Open a repository first.".to_string();
                 }
             }
+            "Change Theme" => {
+                let themes = theme::list_available_themes();
+                if themes.is_empty() {
+                    self.status = "No themes found.".to_string();
+                } else {
+                    self.command_items = themes;
+                    self.command_input.clear();
+                    self.command_cursor = 0;
+                    self.command_is_theme_picker = true;
+                    self.command_palette_visible = true;
+                }
+            }
             "Set Token" => {
                 self.focus = Focus::TokenInput;
                 self.token_buffer = SecretString::new(String::new().into());
@@ -289,6 +301,22 @@ impl App {
                     self.status = "Open a repository first.".to_string();
                 }
             }
+            "View Workflow Runs" => {
+                if let Some(repo) = self.current_repo.clone() {
+                    self.status = "Loading workflow runs...".to_string();
+                    let g = github.clone();
+                    let full_name = repo.full_name.clone();
+                    let branch = self.selected_branch_name();
+                    std::thread::spawn(move || {
+                        let result = g.fetch_workflow_runs(&full_name, &branch, 30);
+                        let _ = tx.send(NetworkEvent::WorkflowRunsResult(
+                            result.unwrap_or_default(),
+                        ));
+                    });
+                } else {
+                    self.status = "Open a repository first.".to_string();
+                }
+            }
             "View PR Detail" => {
                 self.pending_pr_number.clear();
                 self.tree_search_input.clear();
@@ -332,6 +360,41 @@ impl App {
             }
             "Quit" => {
                 self.should_quit = true;
+            }
+            cmd if cmd.starts_with("Clone ") && cmd.contains("Selected Repos") => {
+                if self.multi_selected_repos.is_empty() {
+                    self.status = "No repos selected.".to_string();
+                } else {
+                    let selected: Vec<_> = self
+                        .multi_selected_repos
+                        .iter()
+                        .filter_map(|&i| self.repos.get(i))
+                        .cloned()
+                        .collect();
+                    let dest = self.clone_path_input.trim().to_string();
+                    if dest.is_empty() {
+                        self.status = "Clone destination not set.".to_string();
+                    } else {
+                        let count = selected.len();
+                        self.status = format!("Cloning {} repo(s) to {}...", count, dest);
+                        std::thread::spawn(move || {
+                            for repo in &selected {
+                                let repo_path =
+                                    std::path::PathBuf::from(&dest).join(&repo.name);
+                                if repo_path.exists() {
+                                    log::info!("Skipping {} (already exists)", repo.full_name);
+                                    continue;
+                                }
+                                let _ = std::process::Command::new("git")
+                                    .arg("clone")
+                                    .arg(&repo.clone_url)
+                                    .arg(&repo_path)
+                                    .output();
+                            }
+                        });
+                        self.multi_selected_repos.clear();
+                    }
+                }
             }
             _ => {
                 self.status = format!("Unknown command: {cmd}");

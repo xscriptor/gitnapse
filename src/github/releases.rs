@@ -2,7 +2,6 @@ use crate::error::GitHubError;
 use crate::github::{GitHubClient, with_retry};
 use crate::models::release::Release;
 
-#[allow(dead_code)]
 impl GitHubClient {
     pub fn fetch_releases(
         &self,

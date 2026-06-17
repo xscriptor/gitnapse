@@ -3,7 +3,6 @@ use crate::github::{GitHubClient, with_retry};
 use crate::models::{AuthenticatedUser, ContentResponse, TreeResponse};
 use base64::Engine;
 
-#[allow(dead_code)]
 impl GitHubClient {
     pub fn fetch_file_content(&self, full_name: &str, path: &str) -> anyhow::Result<Vec<u8>> {
         self.fetch_file_content_by_ref(full_name, path, "")
@@ -84,7 +83,6 @@ impl GitHubClient {
     /// This method first obtains the file SHA (either through the Contents API
     /// for files ≤ 1 MB, or by scanning the Git tree for larger files) and then
     /// retrieves the full blob contents.
-    #[allow(dead_code)]
     pub fn fetch_file_content_via_blob_api(
         &self,
         full_name: &str,

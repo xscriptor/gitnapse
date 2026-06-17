@@ -99,6 +99,7 @@ enum Command {
 
 fn main() -> Result<()> {
     let _ = dotenvy::dotenv();
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
     let cli = Cli::parse();
 
     match cli.command {
@@ -139,7 +140,7 @@ fn main() -> Result<()> {
             cli::IssueAction::Create(a) => cli::issue_create(&a.repo, &a.title, a.body.as_deref()),
             cli::IssueAction::Close(a) => cli::issue_close(&a.repo, a.number),
         },
-        Some(Command::Ci(args)) => cli::ci_status(&args.repo, args.branch.as_deref()),
+        Some(Command::Ci(args)) => cli::ci_status(&args.repo, args.branch.as_deref(), args.workflows),
         Some(Command::Compare(args)) => cli::compare(&args.repo, &args.base, &args.head),
         Some(Command::Remote { action }) => match action {
             cli::RemoteAction::List => cli::remote_list(),

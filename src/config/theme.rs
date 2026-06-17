@@ -7,7 +7,6 @@ use crate::config::{config_dir, strip_jsonc_comments};
 pub struct ThemeConfig {
     pub palette: Vec<[u8; 3]>,
     #[serde(default = "default_theme_name")]
-    #[allow(dead_code)]
     pub theme_name: String,
 }
 
@@ -48,23 +47,48 @@ impl ThemeConfig {
             Err(_) => return Self::default(),
         };
 
-        // Auto-install themes on first run
+        // Auto-install/update themes
         let themes_dir = dir.join("themes");
-        if !themes_dir.exists() {
-            let _ = std::fs::create_dir_all(&themes_dir);
+        let _ = std::fs::create_dir_all(&themes_dir);
+
+        let builtin_sources: Vec<PathBuf> = {
+            let mut sources = Vec::new();
             if let Ok(exe_dir) = std::env::current_exe()
                 && let Some(exe_parent) = exe_dir.parent()
             {
-                let builtin_themes = exe_parent.join("../themes");
-                if builtin_themes.exists()
-                    && let Ok(entries) = std::fs::read_dir(&builtin_themes)
-                {
-                    for entry in entries.flatten() {
-                        let path = entry.path();
-                        if path.extension().is_some_and(|ext| ext == "jsonc")
-                            && let Some(name) = path.file_name()
-                        {
-                            let dest = themes_dir.join(name);
+                let p = exe_parent.join("../themes");
+                if p.exists() {
+                    sources.push(p);
+                }
+            }
+            if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+                let p = std::path::PathBuf::from(manifest_dir).join("themes");
+                if p.exists() {
+                    sources.push(p);
+                }
+            }
+            sources
+        };
+
+        for src_dir in &builtin_sources {
+            if let Ok(entries) = std::fs::read_dir(src_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.extension().is_some_and(|ext| ext == "jsonc")
+                        && let Some(name) = path.file_name()
+                    {
+                        let dest = themes_dir.join(name);
+                        // Copy if missing or source is newer
+                        let should_copy = match std::fs::metadata(&dest) {
+                            Ok(dest_meta) => match std::fs::metadata(&path) {
+                                Ok(src_meta) => {
+                                    src_meta.modified().ok() > dest_meta.modified().ok()
+                                }
+                                Err(_) => false,
+                            },
+                            Err(_) => true,
+                        };
+                        if should_copy {
                             let _ = std::fs::copy(&path, &dest);
                         }
                     }

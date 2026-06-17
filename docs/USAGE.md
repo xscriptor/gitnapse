@@ -83,13 +83,9 @@
   </thead>
   <tbody>
     <tr><td>Search Repositories</td><td>Always</td><td>Focus the search input to query GitHub repos</td></tr>
-    <tr><td>Next Page / Previous Page</td><td>Always</td><td>Paginate through search results</td></tr>
     <tr><td>List Starred Repos</td><td>Always</td><td>Show your starred repositories from GitHub</td></tr>
     <tr><td>Change Theme</td><td>Always</td><td>Browse and switch between 12 built-in color themes</td></tr>
     <tr><td>Set Token</td><td>Always</td><td>Save a GitHub token for authenticated requests</td></tr>
-    <tr><td>OAuth Login / OAuth Status</td><td>Always</td><td>Start device-flow login or check session status</td></tr>
-    <tr><td>Clear Token</td><td>Always</td><td>Remove the stored GitHub token</td></tr>
-    <tr><td>Git Status</td><td>Repo open</td><td>Show <code>git status --short</code> for the cloned repo path</td></tr>
     <tr><td>Switch Branch</td><td>Repo open</td><td>Open branch picker to switch the active branch</td></tr>
     <tr><td>Find File</td><td>Repo open</td><td>Fuzzy-search files in the repository tree</td></tr>
     <tr><td>Clone Repository</td><td>Repo open</td><td>Clone the current repo to a local path</td></tr>
@@ -149,17 +145,18 @@
 <h2 id="multi-select" align="center">Multi-Select Repositories</h2>
 <p>
   In the repository list, press <code>Space</code> to toggle selection of the current repo.
-  Selected repos are marked with <code>*</code>. The active selection shows <code>&gt;*</code>
-  and inactive selected ones show <code>*</code>. There is no batch action implemented yet;
+  Selected repos are marked with <code>[*]</code>. The active selection shows <code>&gt;[*]</code>
+  and inactive selected ones show <code>[ ]</code>. There is no batch action implemented yet;
   this is infrastructure for future operations like bulk clone or bulk download.
 </p>
 
 <h2 id="fuzzy-file-search" align="center">Fuzzy File Search</h2>
 <p>
   Press <code>f</code> in the repository tree view or select <code>Find File</code> from the
-  command palette. The tree file search uses the <code>nucleo-matcher</code> library for
-  fuzzy matching. Enter a search term and press <code>Enter</code> to jump to the best
-  matching file. Results are ranked by relevance score. Press <code>Esc</code> to cancel.
+  command palette. The tree file search uses character-order fuzzy matching — all characters
+  in your query must appear in order (not necessarily consecutively) in the target filename.
+  Enter a search term and press <code>Enter</code> to jump to the first match.
+  Press <code>Esc</code> to cancel.
 </p>
 
 <h2 id="themes" align="center">Theme System</h2>
@@ -208,7 +205,9 @@
     "home": "Home",
     "end": "End",
     "enter": "Enter",
-    "escape": "Esc"
+    "escape": "Esc",
+    "backspace": "Backspace",
+    "delete": "Delete"
 }
 </code></pre>
 
@@ -279,7 +278,7 @@
 <h3 id="workflow-multi-select" align="center">Multi-Select Repositories</h3>
 <ol>
   <li>In the repository list, navigate to a repo and press <code>Space</code> to select it.</li>
-  <li>Selected repos show a <code>*</code> marker. Selected + active shows <code>&gt;*</code>.</li>
+  <li>Selected repos show a <code>[*]</code> marker. Selected + active shows <code>&gt;[*]</code>.</li>
   <li>Press <code>Space</code> again to deselect.</li>
 </ol>
 
@@ -295,3 +294,23 @@
   <li>If no repos appear, refine query terms (owner/org/repo keywords).</li>
   <li>If the command palette does not open with <code>Ctrl+P</code>, your terminal may intercept the key combination. Try a different terminal emulator.</li>
 </ul>
+
+<h3 id="macos-keychain-prompts" align="center">macOS: Keychain Password Prompts</h3>
+<p>
+  On macOS, GitNapse stores your GitHub token in the system Keychain via the <code>keyring</code>
+  crate. You may see a dialog asking <em>"gitnapse wants to use the Keychain to store a secret"</em>
+  or prompting for your login password each time you run GitNapse.
+</p>
+<p>To stop the prompts permanently:</p>
+<ol>
+  <li>Open <strong>Keychain Access</strong> app (from <code>/Applications/Utilities/</code> or Spotlight).</li>
+  <li>Search for <code>com.GitNapse.GitNapse</code>.</li>
+  <li>Double-click the entry, go to the <strong>Access Control</strong> tab.</li>
+  <li>Select <strong>"Allow all applications to access this item"</strong>.</li>
+  <li>Click <strong>Save Changes</strong> (you may be asked for your login password to confirm).</li>
+</ol>
+<p>
+  Alternatively, export the <code>GITHUB_TOKEN</code> environment variable in your shell profile
+  (<code>~/.zshrc</code>, <code>~/.bashrc</code>, etc.) to bypass the Keychain entirely:
+</p>
+<pre><code>export GITHUB_TOKEN="ghp_your_token_here"</code></pre>

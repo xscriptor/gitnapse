@@ -56,7 +56,7 @@ fn ensure_rustls_crypto_provider() {
     if rustls::crypto::CryptoProvider::install_default(rustls::crypto::ring::default_provider())
         .is_err()
     {
-        eprintln!("Warning: could not install rustls crypto provider (may already be set)");
+        log::warn!("could not install rustls crypto provider (may already be set)");
     }
 }
 

@@ -65,169 +65,151 @@ impl App {
     }
 
     fn handle_navigation(&mut self, code: KeyCode) {
-        match code {
-            KeyCode::Char('q') => self.should_quit = true,
-            KeyCode::Char('/') => {
-                self.focus = Focus::Search;
-                self.input_buffer = self.search_query.clone();
+        if self.keybindings.matches_key("quit", &code) {
+            self.should_quit = true;
+        } else if code == KeyCode::Char(' ')
+            && self.focus == Focus::Repos
+            && !self.repos.is_empty()
+        {
+            let idx = self.selected_repo;
+            if !self.multi_selected_repos.remove(&idx) {
+                self.multi_selected_repos.insert(idx);
             }
-            KeyCode::Char('t') => {
-                self.focus = Focus::TokenInput;
-                self.input_buffer.clear();
+            self.status = format!(
+                "{} repository(s) selected",
+                self.multi_selected_repos.len()
+            );
+        } else if self.keybindings.matches_key("search", &code) {
+            self.focus = Focus::Search;
+            self.input_buffer = self.search_query.clone();
+        } else if self.keybindings.matches_key("token_input", &code) {
+            self.focus = Focus::TokenInput;
+            self.input_buffer.clear();
+        } else if self.keybindings.matches_key("oauth_status", &code) {
+            self.run_oauth_quick_check();
+        } else if self.keybindings.matches_key("clone", &code) {
+            if self.current_repo.is_some() {
+                self.clone_path_input = self.account.preferred_clone_dir.clone();
+                self.focus = Focus::ClonePath;
+            } else {
+                self.status = "Open a repository first, then press c to clone.".to_string();
             }
-            KeyCode::Char('o') => {
-                self.run_oauth_quick_check();
+        } else if self.keybindings.matches_key("branch_picker", &code) {
+            if self.current_repo.is_some() && !self.branches.is_empty() {
+                self.focus = Focus::BranchPicker;
+            } else {
+                self.status = "Open a repository first to select a branch.".to_string();
             }
-            KeyCode::Char('c') => {
-                if self.current_repo.is_some() {
-                    self.clone_path_input = self.account.preferred_clone_dir.clone();
-                    self.focus = Focus::ClonePath;
-                } else {
-                    self.status = "Open a repository first, then press c to clone.".to_string();
-                }
+        } else if self.keybindings.matches_key("file_search", &code) {
+            if self.current_repo.is_some() {
+                self.tree_search_input.clear();
+                self.focus = Focus::TreeSearch;
             }
-            KeyCode::Char('b') => {
-                if self.current_repo.is_some() && !self.branches.is_empty() {
-                    self.focus = Focus::BranchPicker;
-                } else {
-                    self.status = "Open a repository first to select a branch.".to_string();
-                }
+        } else if self.keybindings.matches_key("download", &code) {
+            if self.current_preview_path.is_some() {
+                self.download_path_input = ".".to_string();
+                self.focus = Focus::DownloadPath;
+            } else {
+                self.status = "Preview a file first before downloading.".to_string();
             }
-            KeyCode::Char('f') => {
-                if self.current_repo.is_some() {
-                    self.tree_search_input.clear();
-                    self.focus = Focus::TreeSearch;
-                }
-            }
-            KeyCode::Char('d') => {
-                if self.current_preview_path.is_some() {
-                    self.download_path_input = ".".to_string();
-                    self.focus = Focus::DownloadPath;
-                } else {
-                    self.status = "Preview a file first before downloading.".to_string();
-                }
-            }
-            KeyCode::Char('v') => {
-                if self.current_repo.is_some() {
-                    self.tree_text_mode = !self.tree_text_mode;
-                    self.preview_scroll = 0;
-                    if self.tree_text_mode {
-                        let branch = self.selected_branch_name();
-                        self.preview_title = format!(
-                            "tree {} [{}]",
-                            self.current_repo
-                                .as_ref()
-                                .map(|r| r.full_name.clone())
-                                .unwrap_or_default(),
-                            branch
-                        );
-                        self.preview_lines = self
-                            .tree_all
-                            .iter()
-                            .map(|node| {
-                                let indent = "  ".repeat(node.depth.min(20));
-                                let icon = if node.is_dir { "[D]" } else { "[F]" };
-                                Line::from(format!("{indent}{icon} {}", node.path))
-                            })
-                            .collect();
-                        self.current_preview_path = None;
-                        self.focus = Focus::Preview;
-                        self.status = "Tree view enabled in preview pane.".to_string();
-                    } else {
-                        self.preview_title = "Preview".to_string();
-                        self.preview_lines = vec![Line::from(
-                            "Tree preview disabled. Select a file and press Enter to preview.",
-                        )];
-                        self.focus = Focus::Tree;
-                        self.status = "Tree view disabled.".to_string();
-                    }
-                }
-            }
-            KeyCode::Tab => {
-                self.focus = match self.focus {
-                    Focus::Repos if !self.tree_all.is_empty() => Focus::Tree,
-                    Focus::Tree if !self.preview_lines.is_empty() => Focus::Preview,
-                    _ => Focus::Repos,
-                }
-            }
-            KeyCode::Esc => self.back_to_repo_list(),
-            KeyCode::Left => {
-                if self.focus == Focus::Repos && self.search_page > 1 {
-                    self.search_page = self.search_page.saturating_sub(1);
-                    self.search();
-                }
-            }
-            KeyCode::Right => {
-                if self.focus == Focus::Repos {
-                    self.search_page = self.search_page.saturating_add(1);
-                    self.search();
-                }
-            }
-            KeyCode::Char('[') => {
-                if self.focus == Focus::Repos && self.search_page > 1 {
-                    self.search_page = self.search_page.saturating_sub(1);
-                    self.search();
-                }
-            }
-            KeyCode::Char(']') => {
-                if self.focus == Focus::Repos {
-                    self.search_page = self.search_page.saturating_add(1);
-                    self.search();
-                }
-            }
-            KeyCode::Down => {
-                if self.focus == Focus::Tree && !self.tree_all.is_empty() {
-                    self.selected_node =
-                        (self.selected_node + 1).min(self.tree_all.len().saturating_sub(1));
-                    self.ensure_lazy_tree_progress();
-                } else if self.focus == Focus::Preview {
-                    self.scroll_preview_down(1, self.preview_viewport_rows);
-                } else if !self.repos.is_empty() {
-                    self.selected_repo =
-                        (self.selected_repo + 1).min(self.repos.len().saturating_sub(1));
-                }
-            }
-            KeyCode::Up => {
-                if self.focus == Focus::Tree && !self.tree_all.is_empty() {
-                    self.selected_node = self.selected_node.saturating_sub(1);
-                } else if self.focus == Focus::Preview {
-                    self.scroll_preview_up(1);
-                } else if !self.repos.is_empty() {
-                    self.selected_repo = self.selected_repo.saturating_sub(1);
-                }
-            }
-            KeyCode::PageDown => {
-                if self.focus == Focus::Preview {
-                    self.scroll_preview_down(
-                        self.preview_viewport_rows / 2,
-                        self.preview_viewport_rows,
+        } else if self.keybindings.matches_key("tree_view", &code) {
+            if self.current_repo.is_some() {
+                self.tree_text_mode = !self.tree_text_mode;
+                self.preview_scroll = 0;
+                if self.tree_text_mode {
+                    let branch = self.selected_branch_name();
+                    self.preview_title = format!(
+                        "tree {} [{}]",
+                        self.current_repo
+                            .as_ref()
+                            .map(|r| r.full_name.clone())
+                            .unwrap_or_default(),
+                        branch
                     );
-                }
-            }
-            KeyCode::PageUp => {
-                if self.focus == Focus::Preview {
-                    self.scroll_preview_up(self.preview_viewport_rows / 2);
-                }
-            }
-            KeyCode::Home => {
-                if self.focus == Focus::Preview {
-                    self.preview_scroll = 0;
-                }
-            }
-            KeyCode::End => {
-                if self.focus == Focus::Preview {
-                    self.preview_scroll = self.preview_lines.len().saturating_sub(1);
-                }
-            }
-            KeyCode::Enter => {
-                if self.focus == Focus::Tree {
-                    self.preview_selected_file();
+                    self.preview_lines = self
+                        .tree_all
+                        .iter()
+                        .map(|node| {
+                            let indent = "  ".repeat(node.depth.min(20));
+                            let icon = if node.is_dir { "[D]" } else { "[F]" };
+                            Line::from(format!("{indent}{icon} {}", node.path))
+                        })
+                        .collect();
+                    self.current_preview_path = None;
                     self.focus = Focus::Preview;
+                    self.status = "Tree view enabled in preview pane.".to_string();
                 } else {
-                    self.open_selected_repo();
+                    self.preview_title = "Preview".to_string();
+                    self.preview_lines = vec![Line::from(
+                        "Tree preview disabled. Select a file and press Enter to preview.",
+                    )];
+                    self.focus = Focus::Tree;
+                    self.status = "Tree view disabled.".to_string();
                 }
             }
-            _ => {}
+        } else if self.keybindings.matches_key("focus_next", &code) {
+            self.focus = match self.focus {
+                Focus::Repos if !self.tree_all.is_empty() => Focus::Tree,
+                Focus::Tree if !self.preview_lines.is_empty() => Focus::Preview,
+                _ => Focus::Repos,
+            }
+        } else if self.keybindings.matches_key("escape", &code) {
+            self.back_to_repo_list();
+        } else if self.keybindings.matches_key("page_left", &code) {
+            if self.focus == Focus::Repos && self.search_page > 1 {
+                self.search_page = self.search_page.saturating_sub(1);
+                self.search();
+            }
+        } else if self.keybindings.matches_key("page_right", &code) {
+            if self.focus == Focus::Repos {
+                self.search_page = self.search_page.saturating_add(1);
+                self.search();
+            }
+        } else if self.keybindings.matches_key("scroll_down", &code) {
+            if self.focus == Focus::Tree && !self.tree_all.is_empty() {
+                self.selected_node =
+                    (self.selected_node + 1).min(self.tree_all.len().saturating_sub(1));
+                self.ensure_lazy_tree_progress();
+            } else if self.focus == Focus::Preview {
+                self.scroll_preview_down(1, self.preview_viewport_rows);
+            } else if !self.repos.is_empty() {
+                self.selected_repo =
+                    (self.selected_repo + 1).min(self.repos.len().saturating_sub(1));
+            }
+        } else if self.keybindings.matches_key("scroll_up", &code) {
+            if self.focus == Focus::Tree && !self.tree_all.is_empty() {
+                self.selected_node = self.selected_node.saturating_sub(1);
+            } else if self.focus == Focus::Preview {
+                self.scroll_preview_up(1);
+            } else if !self.repos.is_empty() {
+                self.selected_repo = self.selected_repo.saturating_sub(1);
+            }
+        } else if self.keybindings.matches_key("page_down", &code) {
+            if self.focus == Focus::Preview {
+                self.scroll_preview_down(
+                    self.preview_viewport_rows / 2,
+                    self.preview_viewport_rows,
+                );
+            }
+        } else if self.keybindings.matches_key("page_up", &code) {
+            if self.focus == Focus::Preview {
+                self.scroll_preview_up(self.preview_viewport_rows / 2);
+            }
+        } else if self.keybindings.matches_key("home", &code) {
+            if self.focus == Focus::Preview {
+                self.preview_scroll = 0;
+            }
+        } else if self.keybindings.matches_key("end", &code) {
+            if self.focus == Focus::Preview {
+                self.preview_scroll = self.preview_lines.len().saturating_sub(1);
+            }
+        } else if self.keybindings.matches_key("enter", &code) {
+            if self.focus == Focus::Tree {
+                self.preview_selected_file();
+                self.focus = Focus::Preview;
+            } else {
+                self.open_selected_repo();
+            }
         }
     }
 
@@ -252,13 +234,11 @@ impl App {
     ) {
         // PR review / creation input mode
         if self.pr_pending_action.is_some() {
-            match code {
-                KeyCode::Esc => {
-                    self.pr_pending_action = None;
-                    self.pr_pending_body.clear();
-                    self.status = "Action cancelled.".to_string();
-                }
-                KeyCode::Enter => {
+            if self.keybindings.matches_key("escape", &code) {
+                self.pr_pending_action = None;
+                self.pr_pending_body.clear();
+                self.status = "Action cancelled.".to_string();
+            } else if self.keybindings.matches_key("enter", &code) {
                     let text = self.pr_pending_body.trim().to_string();
                     let action = self.pr_pending_action.take().unwrap_or_default();
                     let Some(repo) = self.current_repo.clone() else {
@@ -359,14 +339,10 @@ impl App {
                         }
                     }
                     self.pr_pending_body.clear();
-                }
-                KeyCode::Backspace => {
-                    self.pr_pending_body.pop();
-                }
-                KeyCode::Char(ch) => {
-                    self.pr_pending_body.push(ch);
-                }
-                _ => {}
+            } else if self.keybindings.matches_key("backspace", &code) {
+                self.pr_pending_body.pop();
+            } else if let KeyCode::Char(ch) = code {
+                self.pr_pending_body.push(ch);
             }
             return;
         }
@@ -376,13 +352,11 @@ impl App {
             && self.pr_detail.is_none()
             && !self.command_palette_visible
         {
-            match code {
-                KeyCode::Esc => {
-                    self.tree_search_input.clear();
-                    self.focus = Focus::Tree;
-                    self.status = "PR number input cancelled.".to_string();
-                }
-                KeyCode::Enter => {
+            if self.keybindings.matches_key("escape", &code) {
+                self.tree_search_input.clear();
+                self.focus = Focus::Tree;
+                self.status = "PR number input cancelled.".to_string();
+            } else if self.keybindings.matches_key("enter", &code) {
                     let input = self.tree_search_input.trim().to_string();
                     if let Ok(number) = input.parse::<u64>() {
                         if let Some(repo) = self.current_repo.clone() {
@@ -400,14 +374,10 @@ impl App {
                     } else {
                         self.status = format!("Invalid PR number: {input}");
                     }
-                }
-                KeyCode::Backspace => {
-                    self.tree_search_input.pop();
-                }
-                KeyCode::Char(ch) => {
-                    self.tree_search_input.push(ch);
-                }
-                _ => {}
+            } else if self.keybindings.matches_key("backspace", &code) {
+                self.tree_search_input.pop();
+            } else if let KeyCode::Char(ch) = code {
+                self.tree_search_input.push(ch);
             }
             return;
         }

@@ -50,8 +50,8 @@ fn keyring_get(secret_key: &str) -> Option<Result<Option<String>, AuthError>> {
         Ok(entry) => match entry.get_password() {
             Ok(value) => Some(Ok(Some(value))),
             Err(err) => {
-                eprintln!(
-                    "Warning: keyring get_password failed for secret '{}' (service '{}'): {}. Falling back to file storage.",
+                log::warn!(
+                    "keyring get_password failed for secret '{}' (service '{}'): {}. Falling back to file storage.",
                     secret_key, KEYRING_SERVICE, err
                 );
                 Some(Ok(None))
@@ -73,8 +73,8 @@ fn keyring_set(secret_key: &str, value: &str) -> Option<Result<(), AuthError>> {
                 .set_password(value)
                 .map_err(|e| AuthError::Keyring(e.to_string()));
             if let Err(ref err) = result {
-                eprintln!(
-                    "Warning: keyring set_password failed for secret '{}' (service '{}'): {}. Falling back to file storage.",
+                log::warn!(
+                    "keyring set_password failed for secret '{}' (service '{}'): {}. Falling back to file storage.",
                     secret_key, KEYRING_SERVICE, err
                 );
             }
@@ -201,8 +201,8 @@ pub fn load_secret(secret_key: &str, fallback_file: &Path) -> Result<Option<Stri
 /// errors are logged as warnings but do not cause the function to fail.
 pub fn clear_secret(secret_key: &str, fallback_file: &Path) -> Result<(), AuthError> {
     if let Some(Err(e)) = keyring_delete(secret_key) {
-        eprintln!(
-            "Warning: failed to clear keyring secret '{}' (service '{}'): {}. Continuing with file cleanup.",
+        log::warn!(
+            "failed to clear keyring secret '{}' (service '{}'): {}. Continuing with file cleanup.",
             secret_key, KEYRING_SERVICE, e
         );
     }

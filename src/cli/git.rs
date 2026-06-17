@@ -73,10 +73,10 @@ pub fn clone_repo(repo_spec: &str, dir: Option<&str>) -> Result<()> {
 
     let dest = dir.map(PathBuf::from);
 
-    if let Some(ref p) = dest {
-        if p.exists() {
-            return Err(anyhow!("destination path '{}' already exists", p.display()));
-        }
+    if let Some(ref p) = dest
+        && p.exists()
+    {
+        return Err(anyhow!("destination path '{}' already exists", p.display()));
     }
 
     let mut cmd = Command::new("git");

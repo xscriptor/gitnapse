@@ -5,7 +5,6 @@ use crate::models::{
     ReviewComment,
 };
 
-#[allow(dead_code)]
 impl GitHubClient {
     // ── Issues ──────────────────────────────────────────────────────────
 

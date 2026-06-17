@@ -1,4 +1,5 @@
 use super::{App, Focus, theme};
+use crate::config::KeybindingsConfig;
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style};
@@ -12,8 +13,8 @@ pub struct PaneAreas {
     pub preview: Option<Rect>,
 }
 
-pub fn compute_panes(area: Rect, has_repo_open: bool) -> Option<PaneAreas> {
-    let nav_lines = theme::nav_hint_lines(usize::from(area.width.saturating_sub(4)));
+pub fn compute_panes(area: Rect, has_repo_open: bool, kb: &KeybindingsConfig) -> Option<PaneAreas> {
+    let nav_lines = theme::nav_hint_lines(kb, usize::from(area.width.saturating_sub(4)));
     let nav_height = (nav_lines.len() as u16).saturating_add(2).max(3);
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -55,7 +56,7 @@ pub fn compute_panes(area: Rect, has_repo_open: bool) -> Option<PaneAreas> {
 }
 
 pub fn render(frame: &mut Frame<'_>, app: &mut App) {
-    let nav_lines = theme::nav_hint_lines(usize::from(frame.area().width.saturating_sub(4)));
+    let nav_lines = theme::nav_hint_lines(&app.keybindings, usize::from(frame.area().width.saturating_sub(4)));
     let nav_height = (nav_lines.len() as u16).saturating_add(2).max(3);
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -91,8 +92,12 @@ pub fn render(frame: &mut Frame<'_>, app: &mut App) {
         render_repo_list(frame, app, chunks[1]);
     }
 
+    let status_title = match app.github.rate_limit_remaining() {
+        Some(n) => format!("Status — API: {n} remaining"),
+        None => "Status".to_string(),
+    };
     let status = Paragraph::new(app.status.clone())
-        .block(Block::default().borders(Borders::ALL).title("Status"));
+        .block(Block::default().borders(Borders::ALL).title(status_title));
     frame.render_widget(status, chunks[2]);
 
     let nav = Paragraph::new(nav_lines)
@@ -167,7 +172,7 @@ pub fn render(frame: &mut Frame<'_>, app: &mut App) {
         frame.render_widget(Clear, area);
         let modal = Paragraph::new(app.tree_search_input.clone()).block(
             Block::default()
-                .title("Find File By Name (type, Enter search, Esc cancel)")
+                .title("Find File (fuzzy match — type, Enter search, Esc cancel)")
                 .borders(Borders::ALL),
         );
         frame.render_widget(modal, area);
@@ -274,10 +279,15 @@ fn render_repo_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
             } else {
                 " "
             };
+            let select = if app.multi_selected_repos.contains(&absolute) {
+                "[*]"
+            } else {
+                "[ ]"
+            };
             let desc = repo.description.as_deref().unwrap_or("No description");
             let lang = repo.language.as_deref().unwrap_or("unknown");
             let line = format!(
-                "{marker} {}/{} | ★{} | {} | {}",
+                "{marker} {select} {}/{} | ★{} | {} | {}",
                 repo.owner.login, repo.name, repo.stargazers_count, lang, desc
             );
             let style = if absolute == app.selected_repo {

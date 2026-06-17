@@ -28,7 +28,7 @@
   <li>Open any repo to browse its file tree with lazy loading for large trees</li>
   <li>File preview with syntax highlighting (Rust, Python, JavaScript, Go, C, and more)</li>
   <li>Branch picker to switch between branches</li>
-  <li>Fuzzy file finder using <code>nucleo-matcher</code> to locate files in the tree</li>
+  <li>Fuzzy file finder (character-order matching) to locate files in the tree</li>
   <li>Tree text view to see the full repository tree in the preview pane</li>
   <li>Clone the repository to a local path</li>
   <li>Download individual previewed files</li>
@@ -41,14 +41,14 @@
   all available actions. Type to filter, arrows to navigate, Enter to execute, Esc to close.
 </p>
 <ul>
-  <li>Search Repositories, Next Page, Previous Page</li>
+  <li>Search Repositories</li>
   <li>List Starred Repositories</li>
   <li>Switch Branch, Find File, Clone Repository, Download Current File</li>
   <li>Change Theme (browse and switch between 12 built-in themes)</li>
   <li>View PR Detail, Create Pull Request</li>
   <li>List Issues, List Pull Requests</li>
   <li>View Recent Commits, View CI Status, Compare Branches</li>
-  <li>Git Status, Set Token, OAuth Login, OAuth Status, Clear Token</li>
+  <li>Set Token</li>
   <li>Quit</li>
 </ul>
 
