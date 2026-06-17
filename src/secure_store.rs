@@ -52,7 +52,9 @@ fn keyring_get(secret_key: &str) -> Option<Result<Option<String>, AuthError>> {
             Err(err) => {
                 log::warn!(
                     "keyring get_password failed for secret '{}' (service '{}'): {}. Falling back to file storage.",
-                    secret_key, KEYRING_SERVICE, err
+                    secret_key,
+                    KEYRING_SERVICE,
+                    err
                 );
                 Some(Ok(None))
             }
@@ -75,7 +77,9 @@ fn keyring_set(secret_key: &str, value: &str) -> Option<Result<(), AuthError>> {
             if let Err(ref err) = result {
                 log::warn!(
                     "keyring set_password failed for secret '{}' (service '{}'): {}. Falling back to file storage.",
-                    secret_key, KEYRING_SERVICE, err
+                    secret_key,
+                    KEYRING_SERVICE,
+                    err
                 );
             }
             Some(result)
@@ -203,7 +207,9 @@ pub fn clear_secret(secret_key: &str, fallback_file: &Path) -> Result<(), AuthEr
     if let Some(Err(e)) = keyring_delete(secret_key) {
         log::warn!(
             "failed to clear keyring secret '{}' (service '{}'): {}. Continuing with file cleanup.",
-            secret_key, KEYRING_SERVICE, e
+            secret_key,
+            KEYRING_SERVICE,
+            e
         );
     }
     file_delete(fallback_file)

@@ -111,15 +111,13 @@ impl KeybindingsConfig {
     }
 
     pub fn matches_key(&self, action: &str, code: &KeyCode) -> bool {
-        self.action_keys(action)
-            .iter()
-            .any(|key_str| {
-                if let Some(kc) = str_to_keycode(key_str) {
-                    &kc == code
-                } else {
-                    false
-                }
-            })
+        self.action_keys(action).iter().any(|key_str| {
+            if let Some(kc) = str_to_keycode(key_str) {
+                &kc == code
+            } else {
+                false
+            }
+        })
     }
 
     pub fn load_or_default() -> Self {

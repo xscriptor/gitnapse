@@ -109,8 +109,12 @@ fn main() -> Result<()> {
         }
         Some(Command::Clone(args)) => cli::clone_repo(&args.repo, args.dir.as_deref()),
         Some(Command::Commit(args)) => cli::commit(&args.message, args.all),
-        Some(Command::Push(args)) => cli::push(args.remote.as_deref(), args.branch.as_deref(), args.force),
-        Some(Command::Pull(args)) => cli::pull(args.remote.as_deref(), args.branch.as_deref(), args.rebase),
+        Some(Command::Push(args)) => {
+            cli::push(args.remote.as_deref(), args.branch.as_deref(), args.force)
+        }
+        Some(Command::Pull(args)) => {
+            cli::pull(args.remote.as_deref(), args.branch.as_deref(), args.rebase)
+        }
         Some(Command::Fetch(args)) => cli::fetch(args.prune),
         Some(Command::Checkout(args)) => cli::checkout(&args.branch, args.create),
         Some(Command::Diff(args)) => cli::diff(args.staged, args.path.as_deref()),
@@ -121,9 +125,11 @@ fn main() -> Result<()> {
         },
         Some(Command::Tag { action }) => match action {
             cli::TagAction::List { pattern } => cli::tag_list(pattern.as_deref()),
-            cli::TagAction::Create { name, message, target } => {
-                cli::tag_create(&name, message.as_deref(), target.as_deref())
-            }
+            cli::TagAction::Create {
+                name,
+                message,
+                target,
+            } => cli::tag_create(&name, message.as_deref(), target.as_deref()),
             cli::TagAction::Delete { name } => cli::tag_delete(&name),
         },
         Some(Command::Status) => cli::status(),
@@ -132,7 +138,9 @@ fn main() -> Result<()> {
         Some(Command::Reset(args)) => cli::reset(args.target.as_deref(), args.hard),
         Some(Command::Pr { action }) => match action {
             cli::PrAction::List(a) => cli::pr_list(&a.repo, &a.state),
-            cli::PrAction::Create(a) => cli::pr_create(&a.repo, &a.title, &a.head, &a.base, a.body.as_deref()),
+            cli::PrAction::Create(a) => {
+                cli::pr_create(&a.repo, &a.title, &a.head, &a.base, a.body.as_deref())
+            }
             cli::PrAction::Merge(a) => cli::pr_merge(&a.repo, a.number, a.method.as_deref()),
         },
         Some(Command::Issue { action }) => match action {
@@ -140,7 +148,9 @@ fn main() -> Result<()> {
             cli::IssueAction::Create(a) => cli::issue_create(&a.repo, &a.title, a.body.as_deref()),
             cli::IssueAction::Close(a) => cli::issue_close(&a.repo, a.number),
         },
-        Some(Command::Ci(args)) => cli::ci_status(&args.repo, args.branch.as_deref(), args.workflows),
+        Some(Command::Ci(args)) => {
+            cli::ci_status(&args.repo, args.branch.as_deref(), args.workflows)
+        }
         Some(Command::Compare(args)) => cli::compare(&args.repo, &args.base, &args.head),
         Some(Command::Remote { action }) => match action {
             cli::RemoteAction::List => cli::remote_list(),
@@ -156,10 +166,18 @@ fn main() -> Result<()> {
         Some(Command::Merge(args)) => cli::merge(&args.branch),
         Some(Command::Release { action }) => match action {
             cli::ReleaseAction::List(a) => cli::release_list(&a.repo),
-            cli::ReleaseAction::Create(a) => cli::release_create(&a.repo, &a.tag_name, a.name.as_deref(), a.body.as_deref(), a.prerelease),
+            cli::ReleaseAction::Create(a) => cli::release_create(
+                &a.repo,
+                &a.tag_name,
+                a.name.as_deref(),
+                a.body.as_deref(),
+                a.prerelease,
+            ),
         },
         Some(Command::Repo { action }) => match action {
-            cli::RepoAction::Create(a) => cli::repo_create(&a.name, a.description.as_deref(), a.private),
+            cli::RepoAction::Create(a) => {
+                cli::repo_create(&a.name, a.description.as_deref(), a.private)
+            }
         },
         Some(Command::Search(args)) => cli::search(&args.query),
         Some(Command::Auth { action }) => match action {
@@ -167,9 +185,11 @@ fn main() -> Result<()> {
             cli::AuthAction::Clear => auth::clear_token_cli(),
             cli::AuthAction::Status => auth::status_cli(),
             cli::AuthAction::Oauth { action } => match action {
-                cli::OauthAction::Login { client_id, scope, timeout_secs } => {
-                    oauth::oauth_device_login_cli(client_id, scope, timeout_secs)
-                }
+                cli::OauthAction::Login {
+                    client_id,
+                    scope,
+                    timeout_secs,
+                } => oauth::oauth_device_login_cli(client_id, scope, timeout_secs),
                 cli::OauthAction::Status => oauth::oauth_status_cli(),
             },
         },

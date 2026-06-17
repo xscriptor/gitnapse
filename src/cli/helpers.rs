@@ -117,7 +117,10 @@ pub fn handle_api_error(full_name: &str, e: &GitHubError) -> String {
             "authentication required — run 'gitnapse auth set' or 'gitnapse auth oauth login'"
                 .to_string()
         }
-        GitHubError::RateLimited { remaining: _, reset } => {
+        GitHubError::RateLimited {
+            remaining: _,
+            reset,
+        } => {
             format!("GitHub API rate limit exceeded — resets at timestamp {reset}")
         }
         _ => format!("{e}"),
@@ -165,7 +168,11 @@ mod tests {
         let out = std::process::Output {
             stdout: Vec::new(),
             stderr: b"fatal: not a git repository (or any parent directory)"[..].to_vec(),
-            status: std::process::Command::new("sh").arg("-c").arg("exit 128").status().unwrap(),
+            status: std::process::Command::new("sh")
+                .arg("-c")
+                .arg("exit 128")
+                .status()
+                .unwrap(),
         };
         let msg = not_a_repo_or_stderr(&out, "git status failed");
         assert_eq!(msg, not_a_repo_msg());
@@ -204,7 +211,12 @@ mod tests {
             .output()
             .unwrap();
         std::process::Command::new("git")
-            .args(["remote", "add", "origin", "https://github.com/owner/my-repo.git"])
+            .args([
+                "remote",
+                "add",
+                "origin",
+                "https://github.com/owner/my-repo.git",
+            ])
             .current_dir(&repo_path)
             .output()
             .unwrap();
@@ -228,7 +240,9 @@ mod tests {
     fn test_resolve_full_name_ambiguous_outside_repo() {
         // Only test if we're not inside a git repo with an origin remote
         if detect_repo_from_remote().is_some() {
-            eprintln!("skipping test_resolve_full_name_ambiguous_outside_repo: inside a git repo with origin");
+            eprintln!(
+                "skipping test_resolve_full_name_ambiguous_outside_repo: inside a git repo with origin"
+            );
             return;
         }
         let err = resolve_full_name("justname").unwrap_err();

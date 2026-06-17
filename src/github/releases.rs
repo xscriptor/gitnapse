@@ -39,7 +39,8 @@ impl GitHubClient {
         let tag_name = tag_name.to_string();
         let name = name.map(|s| s.to_string());
         let body = body.map(|s| s.to_string());
-        Self::get_runtime().block_on(self.async_create_release(full_name, tag_name, name, body, prerelease))
+        Self::get_runtime()
+            .block_on(self.async_create_release(full_name, tag_name, name, body, prerelease))
     }
 
     async fn async_create_release(
@@ -71,7 +72,10 @@ impl GitHubClient {
             if !response.status().is_success() {
                 let status = response.status();
                 let body_text = response.text().await.unwrap_or_default();
-                return Err(GitHubError::Api { status: status.as_u16(), body: body_text });
+                return Err(GitHubError::Api {
+                    status: status.as_u16(),
+                    body: body_text,
+                });
             }
             let data: Release = response.json().await?;
             Ok(data)
@@ -114,7 +118,10 @@ impl GitHubClient {
             if !response.status().is_success() {
                 let status = response.status();
                 let body_text = response.text().await.unwrap_or_default();
-                return Err(GitHubError::Api { status: status.as_u16(), body: body_text });
+                return Err(GitHubError::Api {
+                    status: status.as_u16(),
+                    body: body_text,
+                });
             }
             let data: crate::models::RepoSummary = response.json().await?;
             Ok(data)

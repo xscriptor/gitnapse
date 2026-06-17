@@ -20,10 +20,7 @@ fn parse_repo_spec(spec: &str) -> Result<(String, Option<String>)> {
         if let Some(pos) = spec.rfind(':') {
             let url_part = &spec[..pos];
             let branch_part = &spec[pos + 1..];
-            if !branch_part.is_empty()
-                && !branch_part.contains('/')
-                && !branch_part.contains('.')
-            {
+            if !branch_part.is_empty() && !branch_part.contains('/') && !branch_part.contains('.') {
                 return Ok((url_part.to_string(), Some(branch_part.to_string())));
             }
         }
@@ -595,7 +592,9 @@ pub fn config_list() -> Result<()> {
 
 pub fn merge(branch: &str) -> Result<()> {
     if branch.trim().is_empty() {
-        return Err(anyhow!("branch name cannot be empty\nUsage: gitnapse merge <branch>"));
+        return Err(anyhow!(
+            "branch name cannot be empty\nUsage: gitnapse merge <branch>"
+        ));
     }
     let output = helpers::run_git(&["merge", branch.trim()])?;
     if output.status.success() {
@@ -661,8 +660,7 @@ mod tests {
 
     #[test]
     fn test_parse_repo_spec_url_with_branch() {
-        let (repo, branch) =
-            parse_repo_spec("https://github.com/owner/repo.git:main").unwrap();
+        let (repo, branch) = parse_repo_spec("https://github.com/owner/repo.git:main").unwrap();
         assert_eq!(repo, "https://github.com/owner/repo.git");
         assert_eq!(branch.as_deref(), Some("main"));
     }
@@ -676,8 +674,7 @@ mod tests {
 
     #[test]
     fn test_parse_repo_spec_ssh_with_branch() {
-        let (repo, branch) =
-            parse_repo_spec("git@github.com:owner/repo.git:feature").unwrap();
+        let (repo, branch) = parse_repo_spec("git@github.com:owner/repo.git:feature").unwrap();
         assert_eq!(repo, "git@github.com:owner/repo.git");
         assert_eq!(branch.as_deref(), Some("feature"));
     }
