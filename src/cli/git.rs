@@ -478,6 +478,138 @@ pub fn reset(target: Option<&str>, hard: bool) -> Result<()> {
     Ok(())
 }
 
+// ── Remote ──────────────────────────────────────────────────────────────
+
+pub fn remote_list() -> Result<()> {
+    let output = helpers::run_git(&["remote", "-v"])?;
+    if output.status.success() {
+        let stdout = helpers::stdout_str(&output);
+        if stdout.trim().is_empty() {
+            println!("(no remotes)");
+        } else {
+            print!("{stdout}");
+        }
+    } else {
+        let msg = helpers::not_a_repo_or_stderr(&output, "git remote failed");
+        return Err(anyhow!("{msg}"));
+    }
+    Ok(())
+}
+
+pub fn remote_add(name: &str, url: &str) -> Result<()> {
+    if name.trim().is_empty() {
+        return Err(anyhow!("remote name cannot be empty"));
+    }
+    if url.trim().is_empty() {
+        return Err(anyhow!("remote URL cannot be empty"));
+    }
+    let output = helpers::run_git(&["remote", "add", name.trim(), url.trim()])?;
+    if output.status.success() {
+        println!("✓ Added remote '{name}' -> {url}");
+    } else {
+        let msg = helpers::not_a_repo_or_stderr(&output, "git remote add failed");
+        return Err(anyhow!("{msg}"));
+    }
+    Ok(())
+}
+
+pub fn remote_remove(name: &str) -> Result<()> {
+    if name.trim().is_empty() {
+        return Err(anyhow!("remote name cannot be empty"));
+    }
+    let output = helpers::run_git(&["remote", "remove", name.trim()])?;
+    if output.status.success() {
+        println!("✓ Removed remote '{name}'");
+    } else {
+        let stderr = helpers::stderr_msg(&output);
+        if stderr.contains("could not remove") {
+            return Err(anyhow!("remote '{name}' not found"));
+        }
+        let msg = helpers::not_a_repo_or_stderr(&output, "git remote remove failed");
+        return Err(anyhow!("{msg}"));
+    }
+    Ok(())
+}
+
+pub fn remote_rename(old: &str, new: &str) -> Result<()> {
+    if old.trim().is_empty() || new.trim().is_empty() {
+        return Err(anyhow!("remote name cannot be empty"));
+    }
+    let output = helpers::run_git(&["remote", "rename", old.trim(), new.trim()])?;
+    if output.status.success() {
+        println!("✓ Renamed remote '{old}' -> '{new}'");
+    } else {
+        let msg = helpers::not_a_repo_or_stderr(&output, "git remote rename failed");
+        return Err(anyhow!("{msg}"));
+    }
+    Ok(())
+}
+
+// ── Config ──────────────────────────────────────────────────────────────
+
+pub fn config_get(name: &str) -> Result<()> {
+    if name.trim().is_empty() {
+        return Err(anyhow!("config key cannot be empty"));
+    }
+    let output = helpers::run_git(&["config", name.trim()])?;
+    if output.status.success() {
+        let stdout = helpers::stdout_str(&output);
+        print!("{stdout}");
+    } else {
+        let stderr = helpers::stderr_msg(&output);
+        if stderr.contains("key does not contain") {
+            return Err(anyhow!("invalid config key: {name}"));
+        }
+        return Err(anyhow!("config key '{name}' not found"));
+    }
+    Ok(())
+}
+
+pub fn config_set(name: &str, value: &str) -> Result<()> {
+    if name.trim().is_empty() {
+        return Err(anyhow!("config key cannot be empty"));
+    }
+    let output = helpers::run_git(&["config", name.trim(), value.trim()])?;
+    if output.status.success() {
+        println!("✓ {name} = {value}");
+    } else {
+        let msg = helpers::stderr_msg(&output);
+        return Err(anyhow!("git config set failed:\n{msg}"));
+    }
+    Ok(())
+}
+
+pub fn config_list() -> Result<()> {
+    let output = helpers::run_git(&["config", "--list"])?;
+    if output.status.success() {
+        let stdout = helpers::stdout_str(&output);
+        print!("{stdout}");
+    } else {
+        let msg = helpers::not_a_repo_or_stderr(&output, "git config failed");
+        return Err(anyhow!("{msg}"));
+    }
+    Ok(())
+}
+
+// ── Merge ───────────────────────────────────────────────────────────────
+
+pub fn merge(branch: &str) -> Result<()> {
+    if branch.trim().is_empty() {
+        return Err(anyhow!("branch name cannot be empty\nUsage: gitnapse merge <branch>"));
+    }
+    let output = helpers::run_git(&["merge", branch.trim()])?;
+    if output.status.success() {
+        let stdout = helpers::stdout_str(&output);
+        for line in stdout.lines() {
+            println!("{line}");
+        }
+    } else {
+        let msg = helpers::not_a_repo_or_stderr(&output, "git merge failed");
+        return Err(anyhow!("{msg}"));
+    }
+    Ok(())
+}
+
 // ── Download File ───────────────────────────────────────────────────────
 
 pub fn download_file(repo: &str, path: &str, r#ref: Option<&str>, out: &PathBuf) -> Result<()> {
@@ -499,4 +631,141 @@ pub fn download_file(repo: &str, path: &str, r#ref: Option<&str>, out: &PathBuf)
     fs::write(out, bytes)?;
     println!("Downloaded {}:{} -> {}", repo, path, out.display());
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+
+    #[test]
+    fn test_parse_repo_spec_owner_repo() {
+        let (repo, branch) = parse_repo_spec("owner/repo").unwrap();
+        assert_eq!(repo, "owner/repo");
+        assert!(branch.is_none());
+    }
+
+    #[test]
+    fn test_parse_repo_spec_with_branch() {
+        let (repo, branch) = parse_repo_spec("owner/repo:develop").unwrap();
+        assert_eq!(repo, "owner/repo");
+        assert_eq!(branch.as_deref(), Some("develop"));
+    }
+
+    #[test]
+    fn test_parse_repo_spec_full_url() {
+        let (repo, branch) = parse_repo_spec("https://github.com/owner/repo.git").unwrap();
+        assert_eq!(repo, "https://github.com/owner/repo.git");
+        assert!(branch.is_none());
+    }
+
+    #[test]
+    fn test_parse_repo_spec_url_with_branch() {
+        let (repo, branch) =
+            parse_repo_spec("https://github.com/owner/repo.git:main").unwrap();
+        assert_eq!(repo, "https://github.com/owner/repo.git");
+        assert_eq!(branch.as_deref(), Some("main"));
+    }
+
+    #[test]
+    fn test_parse_repo_spec_ssh_url() {
+        let (repo, branch) = parse_repo_spec("git@github.com:owner/repo.git").unwrap();
+        assert_eq!(repo, "git@github.com:owner/repo.git");
+        assert!(branch.is_none());
+    }
+
+    #[test]
+    fn test_parse_repo_spec_ssh_with_branch() {
+        let (repo, branch) =
+            parse_repo_spec("git@github.com:owner/repo.git:feature").unwrap();
+        assert_eq!(repo, "git@github.com:owner/repo.git");
+        assert_eq!(branch.as_deref(), Some("feature"));
+    }
+
+    #[test]
+    fn test_parse_repo_spec_empty() {
+        let err = parse_repo_spec("").unwrap_err();
+        assert!(format!("{err}").contains("empty"));
+    }
+
+    #[test]
+    fn test_parse_repo_spec_invalid() {
+        let err = parse_repo_spec(":branch").unwrap_err();
+        assert!(format!("{err}").contains("invalid"));
+    }
+
+    fn run_in_temp_repo(test: fn(&std::path::Path)) {
+        let dir = tempfile::tempdir().unwrap();
+        helpers::run_git_with_cwd(&["init"], dir.path()).unwrap();
+        helpers::run_git_with_cwd(&["config", "user.email", "test@test.com"], dir.path()).unwrap();
+        helpers::run_git_with_cwd(&["config", "user.name", "Test"], dir.path()).unwrap();
+
+        std::env::set_current_dir(dir.path()).unwrap();
+        test(dir.path());
+        // CWD restored by caller since tests are serial
+    }
+
+    #[test]
+    #[serial]
+    fn test_status_in_temp_repo() {
+        run_in_temp_repo(|_| {
+            let result = status();
+            assert!(result.is_ok());
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn test_commit_in_temp_repo() {
+        run_in_temp_repo(|path| {
+            std::fs::write(path.join("test.txt"), b"hello").unwrap();
+            let result = commit("initial", true);
+            assert!(result.is_ok(), "commit failed: {:?}", result.err());
+        });
+    }
+
+    #[test]
+    fn test_commit_empty_msg() {
+        let err = commit("", false).unwrap_err();
+        assert!(format!("{err}").contains("empty"));
+    }
+
+    #[test]
+    #[serial]
+    fn test_branch_in_temp_repo() {
+        run_in_temp_repo(|path| {
+            std::fs::write(path.join("f.txt"), b"data").unwrap();
+            helpers::run_git(&["add", "-A"]).unwrap();
+            helpers::run_git(&["commit", "-m", "init"]).unwrap();
+            let result = branch();
+            assert!(result.is_ok());
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn test_checkout_create() {
+        run_in_temp_repo(|path| {
+            std::fs::write(path.join("f.txt"), b"data").unwrap();
+            helpers::run_git(&["add", "-A"]).unwrap();
+            helpers::run_git(&["commit", "-m", "init"]).unwrap();
+            let result = checkout("feature", true);
+            assert!(result.is_ok(), "checkout -b failed: {:?}", result.err());
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn test_reset() {
+        run_in_temp_repo(|path| {
+            std::fs::write(path.join("a.txt"), b"data").unwrap();
+            helpers::run_git(&["add", "-A"]).unwrap();
+            helpers::run_git(&["commit", "-m", "first"]).unwrap();
+            std::fs::write(path.join("b.txt"), b"more").unwrap();
+            helpers::run_git(&["add", "-A"]).unwrap();
+            helpers::run_git(&["commit", "-m", "second"]).unwrap();
+            let result = reset(Some("HEAD~1"), false);
+            assert!(result.is_ok(), "reset failed: {:?}", result.err());
+        });
+    }
 }

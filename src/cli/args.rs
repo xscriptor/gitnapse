@@ -7,7 +7,7 @@ use crate::app;
 
 #[derive(Debug, Clone, Args)]
 pub struct RunArgs {
-    #[arg(long, default_value = "xscriptor")]
+    #[arg(long, default_value = "")]
     pub query: String,
     #[arg(long, default_value_t = 1)]
     pub page: u32,
@@ -164,6 +164,90 @@ pub struct IssueCloseArgs {
     pub number: u64,
 }
 
+// ── Remote subcommand args ──────────────────────────────────────────────
+
+#[derive(Debug, Clone, Args)]
+pub struct RemoteAddArgs {
+    pub name: String,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct RemoteRemoveArgs {
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct RemoteRenameArgs {
+    pub old: String,
+    pub new: String,
+}
+
+// ── Config subcommand args ──────────────────────────────────────────────
+
+#[derive(Debug, Clone, Args)]
+pub struct ConfigGetArgs {
+    pub key: String,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct ConfigSetArgs {
+    pub key: String,
+    pub value: String,
+}
+
+// ── Merge arg ───────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Args)]
+pub struct MergeArgs {
+    pub branch: String,
+}
+
+// ── Release subcommand args ─────────────────────────────────────────────
+
+#[derive(Debug, Clone, Args)]
+pub struct ReleaseListArgs {
+    pub repo: String,
+}
+
+#[derive(Debug, Clone, Args)]
+pub struct ReleaseCreateArgs {
+    pub repo: String,
+    /// Git tag name for the release
+    pub tag_name: String,
+    /// Release title (defaults to tag_name)
+    #[arg(short = 'n', long)]
+    pub name: Option<String>,
+    /// Release body / description
+    #[arg(short = 'b', long)]
+    pub body: Option<String>,
+    /// Mark as pre-release
+    #[arg(long)]
+    pub prerelease: bool,
+}
+
+// ── Repo subcommand args ────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Args)]
+pub struct RepoCreateArgs {
+    /// Repository name
+    pub name: String,
+    /// Repository description
+    #[arg(short = 'd', long)]
+    pub description: Option<String>,
+    /// Create as private repository
+    #[arg(short = 'p', long)]
+    pub private: bool,
+}
+
+// ── Search arg ──────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Args)]
+pub struct SearchArgs {
+    /// Search query
+    pub query: String,
+}
+
 // ── Action enums ────────────────────────────────────────────────────────
 
 #[derive(Debug, Subcommand)]
@@ -205,6 +289,42 @@ pub enum IssueAction {
     List(IssueListArgs),
     Create(IssueCreateArgs),
     Close(IssueCloseArgs),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum RemoteAction {
+    /// List remotes
+    List,
+    /// Add a remote
+    Add(RemoteAddArgs),
+    /// Remove a remote
+    Remove(RemoteRemoveArgs),
+    /// Rename a remote
+    Rename(RemoteRenameArgs),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ConfigAction {
+    /// Get a config value
+    Get(ConfigGetArgs),
+    /// Set a config value
+    Set(ConfigSetArgs),
+    /// List all config
+    List,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ReleaseAction {
+    /// List releases
+    List(ReleaseListArgs),
+    /// Create a release
+    Create(ReleaseCreateArgs),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum RepoAction {
+    /// Create a repository
+    Create(RepoCreateArgs),
 }
 
 #[derive(Debug, Subcommand)]

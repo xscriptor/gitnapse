@@ -169,3 +169,76 @@ pub fn compare(repo: &str, base: &str, head: &str) -> Result<()> {
     }
     Ok(())
 }
+
+// ── Release Commands ────────────────────────────────────────────────────
+
+pub fn release_list(repo: &str) -> Result<()> {
+    let full_name = helpers::resolve_full_name(repo)?;
+    let client = helpers::make_client()?;
+    let releases = client
+        .fetch_releases(&full_name, 30)
+        .map_err(|e| anyhow!(helpers::handle_api_error(&full_name, &e)))?;
+
+    if releases.is_empty() {
+        println!("No releases for {full_name}");
+        return Ok(());
+    }
+
+    for r in &releases {
+        let pre = if r.prerelease { " (pre-release)" } else { "" };
+        let name = r.name.as_deref().unwrap_or(&r.tag_name);
+        println!("  {} [{name}]{pre}", r.tag_name);
+    }
+    Ok(())
+}
+
+pub fn release_create(
+    repo: &str,
+    tag_name: &str,
+    name: Option<&str>,
+    body: Option<&str>,
+    prerelease: bool,
+) -> Result<()> {
+    let full_name = helpers::resolve_full_name(repo)?;
+    let client = helpers::make_client()?;
+    let release = client
+        .create_release(&full_name, tag_name, name, body, prerelease)
+        .map_err(|e| anyhow!(helpers::handle_api_error(&full_name, &e)))?;
+    println!("✓ Release {} created: {}", release.tag_name, release.html_url);
+    Ok(())
+}
+
+// ── Repo Commands ───────────────────────────────────────────────────────
+
+pub fn repo_create(name: &str, description: Option<&str>, private: bool) -> Result<()> {
+    let client = helpers::make_client()?;
+    let repo = client
+        .create_repo(name, description, private)
+        .map_err(|e| anyhow!("{e}"))?;
+    println!("✓ Repository created: {}", repo.clone_url);
+    Ok(())
+}
+
+// ── Search Commands ─────────────────────────────────────────────────────
+
+pub fn search(query: &str) -> Result<()> {
+    let client = helpers::make_client()?;
+    let repos = client
+        .search_repositories_page(query, 1, 30)
+        .map_err(|e| anyhow!("{e}"))?;
+
+    if repos.is_empty() {
+        println!("No results for '{query}'");
+        return Ok(());
+    }
+
+    for repo in &repos {
+        let lang = repo.language.as_deref().unwrap_or("-");
+        println!(
+            "  {} ★{} [{}] {}",
+            repo.full_name, repo.stargazers_count, lang,
+            repo.description.as_deref().unwrap_or(""),
+        );
+    }
+    Ok(())
+}

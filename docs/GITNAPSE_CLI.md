@@ -16,15 +16,18 @@
 <h2 id="overview" align="center">Overview</h2>
 <p>
   GitNapse provides a set of CLI commands that operate both via the <strong>GitHub REST API</strong>
-  (for queries, PR management, issues, CI checks, comparisons) and via <strong>local git</strong>
-  (for clone, commit, push, pull, fetch, checkout, diff, stash, tag, reset, status, log, branch).
+  (for queries, PR management, issues, CI checks, comparisons, releases, repo creation, search)
+  and via <strong>local git</strong>
+  (for clone, commit, push, pull, fetch, checkout, diff, stash, tag, reset, status, log, branch,
+  remote, config, merge).
   Authentication is shared across all commands.
 </p>
 
 <h2 id="authentication" align="center">Authentication</h2>
 <p>
   Commands that hit the GitHub API (<code>clone</code> with <code>owner/repo</code> format,
-  <code>pr</code>, <code>issue</code>, <code>ci</code>, <code>compare</code>) resolve
+  <code>pr</code>, <code>issue</code>, <code>ci</code>, <code>compare</code>,
+  <code>release</code>, <code>repo</code>, <code>search</code>) resolve
   credentials in this order:
 </p>
 <ol>
@@ -98,10 +101,58 @@
       <td><code>-b</code> creates a new branch before switching.</td>
     </tr>
     <tr>
+      <td><code>gitnapse merge</code></td>
+      <td>Merge a branch into current</td>
+      <td><code>gitnapse merge feature/new</code></td>
+      <td>Merges the specified branch into the current branch.</td>
+    </tr>
+    <tr>
       <td><code>gitnapse diff</code></td>
       <td>Show working tree diff</td>
       <td><code>gitnapse diff --staged --path src/main.rs</code></td>
       <td><code>--staged</code> shows staged changes. <code>--path</code> filters by file.</td>
+    </tr>
+    <tr>
+      <td><code>gitnapse remote list</code></td>
+      <td>List remotes</td>
+      <td><code>gitnapse remote list</code></td>
+      <td>Shows <code>git remote -v</code> output.</td>
+    </tr>
+    <tr>
+      <td><code>gitnapse remote add</code></td>
+      <td>Add a remote</td>
+      <td><code>gitnapse remote add origin https://github.com/user/repo.git</code></td>
+      <td>Adds a new remote URL.</td>
+    </tr>
+    <tr>
+      <td><code>gitnapse remote remove</code></td>
+      <td>Remove a remote</td>
+      <td><code>gitnapse remote remove origin</code></td>
+      <td>Removes a remote by name.</td>
+    </tr>
+    <tr>
+      <td><code>gitnapse remote rename</code></td>
+      <td>Rename a remote</td>
+      <td><code>gitnapse remote rename origin upstream</code></td>
+      <td>Renames a remote from old name to new name.</td>
+    </tr>
+    <tr>
+      <td><code>gitnapse config get</code></td>
+      <td>Get a config value</td>
+      <td><code>gitnapse config get user.name</code></td>
+      <td>Shows the value of a git config key.</td>
+    </tr>
+    <tr>
+      <td><code>gitnapse config set</code></td>
+      <td>Set a config value</td>
+      <td><code>gitnapse config set user.name "Your Name"</code></td>
+      <td>Sets a git config key to a value.</td>
+    </tr>
+    <tr>
+      <td><code>gitnapse config list</code></td>
+      <td>List all config</td>
+      <td><code>gitnapse config list</code></td>
+      <td>Shows <code>git config --list</code> output.</td>
     </tr>
     <tr>
       <td><code>gitnapse stash push</code></td>
@@ -245,14 +296,43 @@
       <td><code>gitnapse compare xscriptor/gitnapse main develop</code></td>
       <td>Shows ahead/behind count, files changed with additions and deletions per file.</td>
     </tr>
+    <tr>
+      <td><code>gitnapse release list</code></td>
+      <td>List releases</td>
+      <td><code>gitnapse release list xscriptor/gitnapse</code></td>
+      <td>Shows tag name, release title, and pre-release status.</td>
+    </tr>
+    <tr>
+      <td><code>gitnapse release create</code></td>
+      <td>Create a release</td>
+      <td><code>gitnapse release create xscriptor/gitnapse v1.0 -n "v1.0" -b "changelog" --prerelease</code></td>
+      <td>
+        Requires tag name. Options: <code>--name</code>, <code>--body</code>,
+        <code>--prerelease</code>.
+      </td>
+    </tr>
+    <tr>
+      <td><code>gitnapse repo create</code></td>
+      <td>Create a repository</td>
+      <td><code>gitnapse repo create my-project -d "description" -p</code></td>
+      <td>
+        <code>--description</code> optional. <code>--private</code> for private repos.
+      </td>
+    </tr>
+    <tr>
+      <td><code>gitnapse search</code></td>
+      <td>Search repositories</td>
+      <td><code>gitnapse search "rust language:wasm"</code></td>
+      <td>Uses GitHub search API. Shows stars, language, and description.</td>
+    </tr>
   </tbody>
 </table>
 
 <h2 id="auto-detect" align="center">Auto-detect Repository</h2>
 <p>
   When using API commands (<code>pr</code>, <code>issue</code>, <code>ci</code>,
-  <code>compare</code>), you can omit <code>owner/</code> if you are inside a cloned
-  repository — GitNapse will parse the <code>origin</code> remote to extract
+  <code>compare</code>, <code>release</code>), you can omit <code>owner/</code> if you are
+  inside a cloned repository — GitNapse will parse the <code>origin</code> remote to extract
   <code>owner/repo</code> automatically.
 </p>
 
@@ -335,10 +415,18 @@ gitnapse diff --staged
 gitnapse commit -m "feat: add login" -a
 gitnapse push origin main
 
-# Branches and history
+# Branches, merge, remotes
 gitnapse checkout -b feature/new
+gitnapse merge feature/new
 gitnapse branch
 gitnapse log -n 10
+gitnapse remote add upstream https://github.com/other/repo.git
+gitnapse remote list
+
+# Config
+gitnapse config get user.name
+gitnapse config set user.email "me@example.com"
+gitnapse config list
 
 # Stashing
 gitnapse stash push -m "WIP before refactor"
@@ -367,6 +455,12 @@ gitnapse issue close -n 42
 # CI and comparison
 gitnapse ci xscriptor/gitnapse -b main
 gitnapse compare xscriptor/gitnapse main develop
+
+# Releases, repo creation, search
+gitnapse release list xscriptor/gitnapse
+gitnapse release create xscriptor/gitnapse v1.0 -n "v1.0" -b "changelog"
+gitnapse repo create new-project -d "My new project" -p
+gitnapse search "rust language:wasm"
 </code></pre>
 
 <h2 id="full-command-list" align="center">Full Command List</h2>
@@ -381,7 +475,17 @@ gitnapse compare xscriptor/gitnapse main develop
 ├── pull             Pull from remote (--rebase)
 ├── fetch            Fetch from remote (--prune)
 ├── checkout         Switch branches (-b to create)
+├── merge            Merge a branch into current
 ├── diff             Show diff (--staged, --path)
+├── remote
+│   ├── list         List remotes
+│   ├── add          Add a remote
+│   ├── remove       Remove a remote
+│   └── rename       Rename a remote
+├── config
+│   ├── get          Get a config value
+│   ├── set          Set a config value
+│   └── list         List all config
 ├── stash
 │   ├── push         Stash changes
 │   ├── pop          Restore topmost stash
@@ -403,5 +507,11 @@ gitnapse compare xscriptor/gitnapse main develop
 │   ├── create       Create an issue
 │   └── close        Close an issue
 ├── ci               CI status for a branch
-└── compare          Compare two branches
+├── compare          Compare two branches
+├── release
+│   ├── list         List releases
+│   └── create       Create a release
+├── repo
+│   └── create       Create a repository
+└── search           Search repositories on GitHub
 </code></pre>

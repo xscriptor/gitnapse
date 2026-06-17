@@ -11,6 +11,7 @@ mod ci;
 mod compare;
 mod content;
 mod prs;
+mod releases;
 mod repos;
 
 pub(crate) const GITHUB_API: &str = "https://api.github.com";

@@ -1,6 +1,6 @@
 use super::{App, Focus, theme};
 use ratatui::Frame;
-use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap};
@@ -229,6 +229,33 @@ pub fn render(frame: &mut Frame<'_>, app: &mut App) {
 }
 
 fn render_repo_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
+    if app.repos.is_empty() {
+        let version = env!("CARGO_PKG_VERSION");
+        let info = vec![
+            Line::from(Span::raw("")),
+            Line::from(Span::raw("")),
+            Line::from(Span::raw("        GitNapse")),
+            Line::from(Span::raw("")),
+            Line::from(Span::raw(format!("        Version {version}"))),
+            Line::from(Span::raw("")),
+            Line::from(Span::raw("        https://github.com/xscriptor/gitnapse")),
+            Line::from(Span::raw("")),
+            Line::from(Span::raw("        Author: xscriptor")),
+            Line::from(Span::raw("")),
+            Line::from(Span::raw("")),
+            Line::from(Span::raw("        Press / to search repositories")),
+        ];
+        let block = Block::default()
+            .title("Welcome")
+            .borders(Borders::ALL);
+        let paragraph = Paragraph::new(info)
+            .block(block)
+            .alignment(Alignment::Left)
+            .wrap(Wrap { trim: false });
+        frame.render_widget(paragraph, area);
+        return;
+    }
+
     let viewport_rows = usize::from(area.height.saturating_sub(2)).max(1);
     let max_start = app.repos.len().saturating_sub(viewport_rows);
     let start = app

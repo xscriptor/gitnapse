@@ -24,79 +24,15 @@
   <li>Local <code>git</code> available in <code>PATH</code></li>
 </ul>
 
-<h2 id="cli-table" align="center">CLI Command Table</h2>
-<table>
-  <thead>
-    <tr>
-      <th>Command</th>
-      <th>Purpose</th>
-      <th>Example</th>
-      <th>Notes</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><code>gitnapse</code></td>
-      <td>Run TUI with default options</td>
-      <td><code>gitnapse</code></td>
-      <td>Defaults to query <code>xscriptor</code></td>
-    </tr>
-    <tr>
-      <td><code>gitnapse run ...</code></td>
-      <td>Run TUI with explicit parameters</td>
-      <td><code>gitnapse run --query "xscriptor" --page 1 --per-page 30 --cache-ttl-secs 900</code></td>
-      <td>Controls search bootstrap and preview cache TTL</td>
-    </tr>
-    <tr>
-      <td><code>gitnapse run --query "@me"</code></td>
-      <td>List authenticated repositories (including private)</td>
-      <td><code>gitnapse run --query "@me"</code></td>
-      <td>Requires valid login/token; supports optional filters: text terms and <code>language:</code></td>
-    </tr>
-    <tr>
-      <td><code>gitnapse auth set</code></td>
-      <td>Store GitHub token interactively</td>
-      <td><code>gitnapse auth set</code></td>
-      <td>Hidden prompt for secure input</td>
-    </tr>
-    <tr>
-      <td><code>gitnapse auth set --token ...</code></td>
-      <td>Store token from argument</td>
-      <td><code>gitnapse auth set --token YOUR_GITHUB_TOKEN</code></td>
-      <td>Useful for scripted environments</td>
-    </tr>
-    <tr>
-      <td><code>gitnapse auth status</code></td>
-      <td>Display token source availability</td>
-      <td><code>gitnapse auth status</code></td>
-      <td>Shows env-token and stored-token state</td>
-    </tr>
-    <tr>
-      <td><code>gitnapse auth clear</code></td>
-      <td>Remove stored token</td>
-      <td><code>gitnapse auth clear</code></td>
-      <td>Does not modify <code>GITHUB_TOKEN</code> env variable</td>
-    </tr>
-    <tr>
-      <td><code>gitnapse auth oauth login ...</code></td>
-      <td>OAuth login (device flow via octocrab)</td>
-      <td><code>gitnapse auth oauth login --client-id YOUR_OAUTH_CLIENT_ID --scope read:user --scope repo</code></td>
-      <td>Starts browser-based device authorization and stores access token securely</td>
-    </tr>
-    <tr>
-      <td><code>gitnapse auth oauth status</code></td>
-      <td>Show OAuth/authentication state</td>
-      <td><code>gitnapse auth oauth status</code></td>
-      <td>Prints <code>oauth_logged_in</code>, <code>authenticated</code>, and current user when available</td>
-    </tr>
-    <tr>
-      <td><code>gitnapse download-file ...</code></td>
-      <td>Download one file (curl/wget-like)</td>
-      <td><code>gitnapse download-file --repo owner/repo --path src/main.rs --out ./main.rs</code></td>
-      <td>Supports <code>--ref</code> for branch/tag/sha</td>
-    </tr>
-  </tbody>
-</table>
+<h2 id="cli-table" align="center">CLI Command Reference</h2>
+<p>
+  The full CLI command reference has moved to <a href="./GITNAPSE_CLI.md"><code>GITNAPSE_CLI.md</code></a>.
+  It covers all commands: <code>clone</code>, <code>commit</code>, <code>push</code>, <code>pull</code>,
+  <code>fetch</code>, <code>checkout</code>, <code>diff</code>, <code>stash</code>, <code>tag</code>,
+  <code>status</code>, <code>log</code>, <code>branch</code>, <code>reset</code>, <code>remote</code>,
+  <code>config</code>, <code>merge</code>, <code>pr</code>, <code>issue</code>, <code>ci</code>,
+  <code>compare</code>, <code>search</code>, <code>release</code>, and <code>repo</code>.
+</p>
 
 <h2 id="in-app-controls" align="center">In-App Control Table</h2>
 <table>

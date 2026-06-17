@@ -70,7 +70,7 @@ pub struct RunOptions {
 impl Default for RunOptions {
     fn default() -> Self {
         Self {
-            initial_query: "xscriptor".to_string(),
+            initial_query: String::new(),
             initial_page: 1,
             per_page: 30,
             cache_ttl_secs: 900,

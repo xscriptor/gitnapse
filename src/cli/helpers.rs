@@ -29,6 +29,15 @@ pub fn run_git(args: &[&str]) -> Result<std::process::Output> {
         .with_context(|| format!("failed to execute: git {}", args.join(" ")))
 }
 
+pub fn run_git_with_cwd(args: &[&str], cwd: &std::path::Path) -> Result<std::process::Output> {
+    check_git()?;
+    Command::new("git")
+        .args(args)
+        .current_dir(cwd)
+        .output()
+        .with_context(|| format!("failed to execute: git {} in {:?}", args.join(" "), cwd))
+}
+
 pub fn stderr_msg(output: &std::process::Output) -> String {
     String::from_utf8_lossy(&output.stderr).trim().to_string()
 }
@@ -118,4 +127,134 @@ pub fn handle_api_error(full_name: &str, e: &GitHubError) -> String {
 pub fn make_client() -> Result<GitHubClient> {
     let token = auth::load_token()?;
     GitHubClient::new(token.as_deref()).map_err(|e| anyhow!("failed to create HTTP client: {e}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_git_available() {
+        // git should be available in the test environment
+        assert!(is_git_available());
+    }
+
+    #[test]
+    fn test_check_git_succeeds() {
+        assert!(check_git().is_ok());
+    }
+
+    #[test]
+    fn test_run_git_version() {
+        let out = run_git(&["--version"]);
+        assert!(out.is_ok());
+        let out = out.unwrap();
+        assert!(out.status.success());
+        let stdout = stdout_str(&out);
+        assert!(stdout.contains("git version"));
+    }
+
+    #[test]
+    fn test_not_a_repo_msg_format() {
+        let msg = not_a_repo_msg();
+        assert!(msg.contains("not a git repository"));
+    }
+
+    #[test]
+    fn test_not_a_repo_or_stderr_detects_repo_msg() {
+        let out = std::process::Output {
+            stdout: Vec::new(),
+            stderr: b"fatal: not a git repository (or any parent directory)"[..].to_vec(),
+            status: std::process::Command::new("sh").arg("-c").arg("exit 128").status().unwrap(),
+        };
+        let msg = not_a_repo_or_stderr(&out, "git status failed");
+        assert_eq!(msg, not_a_repo_msg());
+    }
+
+    #[test]
+    fn test_stderr_msg_extracts_stderr() {
+        let out = std::process::Output {
+            stdout: Vec::new(),
+            stderr: b"error message"[..].to_vec(),
+            status: std::process::Command::new("true").status().unwrap(),
+        };
+        assert_eq!(stderr_msg(&out), "error message");
+    }
+
+    #[test]
+    fn test_stdout_str_extracts_stdout() {
+        let out = std::process::Output {
+            stdout: b"hello\nworld\n"[..].to_vec(),
+            stderr: Vec::new(),
+            status: std::process::Command::new("true").status().unwrap(),
+        };
+        assert_eq!(stdout_str(&out), "hello\nworld\n");
+    }
+
+    #[test]
+    #[serial_test::serial]
+    fn test_detect_repo_from_remote_in_temp_repo() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo_path = dir.path().join("test-repo");
+        std::fs::create_dir(&repo_path).unwrap();
+
+        std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["remote", "add", "origin", "https://github.com/owner/my-repo.git"])
+            .current_dir(&repo_path)
+            .output()
+            .unwrap();
+
+        let prev = std::env::current_dir().ok();
+        std::env::set_current_dir(&repo_path).unwrap();
+        let result = detect_repo_from_remote();
+        if let Some(d) = prev {
+            let _ = std::env::set_current_dir(d);
+        }
+
+        assert_eq!(result, Some("owner/my-repo".to_string()));
+    }
+
+    #[test]
+    fn test_resolve_full_name_with_slash() {
+        assert_eq!(resolve_full_name("owner/repo").unwrap(), "owner/repo");
+    }
+
+    #[test]
+    fn test_resolve_full_name_ambiguous_outside_repo() {
+        let err = resolve_full_name("justname").unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("ambiguous"));
+    }
+
+    #[test]
+    fn test_handle_api_error_404() {
+        let err = GitHubError::Api {
+            status: 404,
+            body: "Not Found".to_string(),
+        };
+        let msg = handle_api_error("test/repo", &err);
+        assert_eq!(msg, "repository 'test/repo' not found on GitHub");
+    }
+
+    #[test]
+    fn test_handle_api_error_unauthorized() {
+        let err = GitHubError::Unauthorized;
+        let msg = handle_api_error("test/repo", &err);
+        assert!(msg.contains("authentication required"));
+    }
+
+    #[test]
+    fn test_handle_api_error_rate_limited() {
+        let err = GitHubError::RateLimited {
+            remaining: 0,
+            reset: 12345,
+        };
+        let msg = handle_api_error("test/repo", &err);
+        assert!(msg.contains("rate limit exceeded"));
+    }
 }

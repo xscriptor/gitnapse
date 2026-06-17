@@ -71,6 +71,30 @@ enum Command {
     Ci(cli::CiArgs),
     /// Compare two branches
     Compare(cli::CompareArgs),
+    /// Manage remotes
+    Remote {
+        #[command(subcommand)]
+        action: cli::RemoteAction,
+    },
+    /// Manage git config
+    Config {
+        #[command(subcommand)]
+        action: cli::ConfigAction,
+    },
+    /// Merge a branch into current
+    Merge(cli::MergeArgs),
+    /// Manage releases via GitHub API
+    Release {
+        #[command(subcommand)]
+        action: cli::ReleaseAction,
+    },
+    /// Manage repositories via GitHub API
+    Repo {
+        #[command(subcommand)]
+        action: cli::RepoAction,
+    },
+    /// Search repositories on GitHub
+    Search(cli::SearchArgs),
 }
 
 fn main() -> Result<()> {
@@ -117,6 +141,26 @@ fn main() -> Result<()> {
         },
         Some(Command::Ci(args)) => cli::ci_status(&args.repo, args.branch.as_deref()),
         Some(Command::Compare(args)) => cli::compare(&args.repo, &args.base, &args.head),
+        Some(Command::Remote { action }) => match action {
+            cli::RemoteAction::List => cli::remote_list(),
+            cli::RemoteAction::Add(a) => cli::remote_add(&a.name, &a.url),
+            cli::RemoteAction::Remove(a) => cli::remote_remove(&a.name),
+            cli::RemoteAction::Rename(a) => cli::remote_rename(&a.old, &a.new),
+        },
+        Some(Command::Config { action }) => match action {
+            cli::ConfigAction::Get(a) => cli::config_get(&a.key),
+            cli::ConfigAction::Set(a) => cli::config_set(&a.key, &a.value),
+            cli::ConfigAction::List => cli::config_list(),
+        },
+        Some(Command::Merge(args)) => cli::merge(&args.branch),
+        Some(Command::Release { action }) => match action {
+            cli::ReleaseAction::List(a) => cli::release_list(&a.repo),
+            cli::ReleaseAction::Create(a) => cli::release_create(&a.repo, &a.tag_name, a.name.as_deref(), a.body.as_deref(), a.prerelease),
+        },
+        Some(Command::Repo { action }) => match action {
+            cli::RepoAction::Create(a) => cli::repo_create(&a.name, a.description.as_deref(), a.private),
+        },
+        Some(Command::Search(args)) => cli::search(&args.query),
         Some(Command::Auth { action }) => match action {
             cli::AuthAction::Set { token } => auth::set_token_cli(token),
             cli::AuthAction::Clear => auth::clear_token_cli(),
