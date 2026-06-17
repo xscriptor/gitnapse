@@ -1,7 +1,7 @@
 pub mod app;
 pub mod auth;
 pub mod cache;
-pub mod cli_commands;
+pub mod cli;
 pub mod config;
 pub mod error;
 pub mod github;

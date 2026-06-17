@@ -452,4 +452,91 @@ impl GitHubClient {
         })
         .await
     }
+
+    // ── Create Issue ────────────────────────────────────────────────
+
+    /// Create an issue.
+    pub fn create_issue(
+        &self,
+        full_name: &str,
+        title: &str,
+        body: Option<&str>,
+    ) -> Result<Issue, GitHubError> {
+        let full_name = full_name.to_string();
+        let title = title.to_string();
+        let body = body.map(|s| s.to_string());
+        Self::get_runtime().block_on(self.async_create_issue(full_name, title, body))
+    }
+
+    async fn async_create_issue(
+        &self,
+        full_name: String,
+        title: String,
+        body: Option<String>,
+    ) -> Result<Issue, GitHubError> {
+        with_retry(|| async {
+            self.check_rate_limit()?;
+            let api_base = Self::api_base();
+            let url = format!("{api_base}/repos/{full_name}/issues");
+
+            let mut payload = serde_json::json!({ "title": title });
+            if let Some(ref b) = body {
+                payload["body"] = serde_json::json!(b);
+            }
+
+            let response = self.client.post(url).json(&payload).send().await?;
+            self.update_rate_limit_from_response(&response);
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let body_text = response.text().await.unwrap_or_default();
+                return Err(GitHubError::Api {
+                    status: status.as_u16(),
+                    body: body_text,
+                });
+            }
+
+            let data: Issue = response.json().await?;
+            Ok(data)
+        })
+        .await
+    }
+
+    // ── Close Issue ──────────────────────────────────────────────────
+
+    /// Close an issue.
+    pub fn close_issue(&self, full_name: &str, number: u64) -> Result<Issue, GitHubError> {
+        let full_name = full_name.to_string();
+        Self::get_runtime().block_on(self.async_close_issue(full_name, number))
+    }
+
+    async fn async_close_issue(
+        &self,
+        full_name: String,
+        number: u64,
+    ) -> Result<Issue, GitHubError> {
+        with_retry(|| async {
+            self.check_rate_limit()?;
+            let api_base = Self::api_base();
+            let url = format!("{api_base}/repos/{full_name}/issues/{number}");
+
+            let payload = serde_json::json!({ "state": "closed" });
+
+            let response = self.client.patch(url).json(&payload).send().await?;
+            self.update_rate_limit_from_response(&response);
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let body_text = response.text().await.unwrap_or_default();
+                return Err(GitHubError::Api {
+                    status: status.as_u16(),
+                    body: body_text,
+                });
+            }
+
+            let data: Issue = response.json().await?;
+            Ok(data)
+        })
+        .await
+    }
 }
