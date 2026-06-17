@@ -56,7 +56,10 @@ pub fn compute_panes(area: Rect, has_repo_open: bool, kb: &KeybindingsConfig) ->
 }
 
 pub fn render(frame: &mut Frame<'_>, app: &mut App) {
-    let nav_lines = theme::nav_hint_lines(&app.keybindings, usize::from(frame.area().width.saturating_sub(4)));
+    let nav_lines = theme::nav_hint_lines(
+        &app.keybindings,
+        usize::from(frame.area().width.saturating_sub(4)),
+    );
     let nav_height = (nav_lines.len() as u16).saturating_add(2).max(3);
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -250,9 +253,7 @@ fn render_repo_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
             Line::from(Span::raw("")),
             Line::from(Span::raw("        Press / to search repositories")),
         ];
-        let block = Block::default()
-            .title("Welcome")
-            .borders(Borders::ALL);
+        let block = Block::default().title("Welcome").borders(Borders::ALL);
         let paragraph = Paragraph::new(info)
             .block(block)
             .alignment(Alignment::Left)

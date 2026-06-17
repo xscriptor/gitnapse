@@ -67,18 +67,13 @@ impl App {
     fn handle_navigation(&mut self, code: KeyCode) {
         if self.keybindings.matches_key("quit", &code) {
             self.should_quit = true;
-        } else if code == KeyCode::Char(' ')
-            && self.focus == Focus::Repos
-            && !self.repos.is_empty()
+        } else if code == KeyCode::Char(' ') && self.focus == Focus::Repos && !self.repos.is_empty()
         {
             let idx = self.selected_repo;
             if !self.multi_selected_repos.remove(&idx) {
                 self.multi_selected_repos.insert(idx);
             }
-            self.status = format!(
-                "{} repository(s) selected",
-                self.multi_selected_repos.len()
-            );
+            self.status = format!("{} repository(s) selected", self.multi_selected_repos.len());
         } else if self.keybindings.matches_key("search", &code) {
             self.focus = Focus::Search;
             self.input_buffer = self.search_query.clone();
@@ -239,106 +234,104 @@ impl App {
                 self.pr_pending_body.clear();
                 self.status = "Action cancelled.".to_string();
             } else if self.keybindings.matches_key("enter", &code) {
-                    let text = self.pr_pending_body.trim().to_string();
-                    let action = self.pr_pending_action.take().unwrap_or_default();
-                    let Some(repo) = self.current_repo.clone() else {
-                        self.status = "No repository loaded.".to_string();
-                        return;
-                    };
-                    let Some(detail) = self.pr_detail.clone() else {
-                        // For create_pr, detail is not needed
-                        if action.starts_with("create_pr_") {
-                            self.handle_pr_creation_step(action, text, tx, github);
-                        } else {
-                            self.status = "No PR loaded.".to_string();
-                        }
-                        return;
-                    };
-                    let full_name = repo.full_name.clone();
-                    let number = detail.number;
-                    let g = github.clone();
-
-                    match action.as_str() {
-                        "approve" => {
-                            self.status = "Approving PR...".to_string();
-                            std::thread::spawn(move || {
-                                let body = if text.is_empty() {
-                                    "LGTM, approved."
-                                } else {
-                                    &text
-                                };
-                                match g
-                                    .create_pull_request_review(&full_name, number, body, "APPROVE")
-                                {
-                                    Ok(_) => {
-                                        let _ = tx.send(NetworkEvent::PrActionResult(
-                                            "PR approved.".to_string(),
-                                        ));
-                                    }
-                                    Err(e) => {
-                                        let _ = tx.send(NetworkEvent::PrActionResult(format!(
-                                            "Approve failed: {e}"
-                                        )));
-                                    }
-                                }
-                            });
-                        }
-                        "request_changes" => {
-                            self.status = "Requesting changes...".to_string();
-                            std::thread::spawn(move || {
-                                let body = if text.is_empty() {
-                                    "Please address the requested changes."
-                                } else {
-                                    &text
-                                };
-                                match g.create_pull_request_review(
-                                    &full_name,
-                                    number,
-                                    body,
-                                    "REQUEST_CHANGES",
-                                ) {
-                                    Ok(_) => {
-                                        let _ = tx.send(NetworkEvent::PrActionResult(
-                                            "Changes requested.".to_string(),
-                                        ));
-                                    }
-                                    Err(e) => {
-                                        let _ = tx.send(NetworkEvent::PrActionResult(format!(
-                                            "Request failed: {e}"
-                                        )));
-                                    }
-                                }
-                            });
-                        }
-                        "comment" => {
-                            self.status = "Posting comment...".to_string();
-                            std::thread::spawn(move || {
-                                let body = if text.is_empty() {
-                                    "Reviewed the changes."
-                                } else {
-                                    &text
-                                };
-                                match g
-                                    .create_pull_request_review(&full_name, number, body, "COMMENT")
-                                {
-                                    Ok(_) => {
-                                        let _ = tx.send(NetworkEvent::PrActionResult(
-                                            "Comment posted.".to_string(),
-                                        ));
-                                    }
-                                    Err(e) => {
-                                        let _ = tx.send(NetworkEvent::PrActionResult(format!(
-                                            "Comment failed: {e}"
-                                        )));
-                                    }
-                                }
-                            });
-                        }
-                        _ => {
-                            self.status = format!("Unknown action: {action}");
-                        }
+                let text = self.pr_pending_body.trim().to_string();
+                let action = self.pr_pending_action.take().unwrap_or_default();
+                let Some(repo) = self.current_repo.clone() else {
+                    self.status = "No repository loaded.".to_string();
+                    return;
+                };
+                let Some(detail) = self.pr_detail.clone() else {
+                    // For create_pr, detail is not needed
+                    if action.starts_with("create_pr_") {
+                        self.handle_pr_creation_step(action, text, tx, github);
+                    } else {
+                        self.status = "No PR loaded.".to_string();
                     }
-                    self.pr_pending_body.clear();
+                    return;
+                };
+                let full_name = repo.full_name.clone();
+                let number = detail.number;
+                let g = github.clone();
+
+                match action.as_str() {
+                    "approve" => {
+                        self.status = "Approving PR...".to_string();
+                        std::thread::spawn(move || {
+                            let body = if text.is_empty() {
+                                "LGTM, approved."
+                            } else {
+                                &text
+                            };
+                            match g.create_pull_request_review(&full_name, number, body, "APPROVE")
+                            {
+                                Ok(_) => {
+                                    let _ = tx.send(NetworkEvent::PrActionResult(
+                                        "PR approved.".to_string(),
+                                    ));
+                                }
+                                Err(e) => {
+                                    let _ = tx.send(NetworkEvent::PrActionResult(format!(
+                                        "Approve failed: {e}"
+                                    )));
+                                }
+                            }
+                        });
+                    }
+                    "request_changes" => {
+                        self.status = "Requesting changes...".to_string();
+                        std::thread::spawn(move || {
+                            let body = if text.is_empty() {
+                                "Please address the requested changes."
+                            } else {
+                                &text
+                            };
+                            match g.create_pull_request_review(
+                                &full_name,
+                                number,
+                                body,
+                                "REQUEST_CHANGES",
+                            ) {
+                                Ok(_) => {
+                                    let _ = tx.send(NetworkEvent::PrActionResult(
+                                        "Changes requested.".to_string(),
+                                    ));
+                                }
+                                Err(e) => {
+                                    let _ = tx.send(NetworkEvent::PrActionResult(format!(
+                                        "Request failed: {e}"
+                                    )));
+                                }
+                            }
+                        });
+                    }
+                    "comment" => {
+                        self.status = "Posting comment...".to_string();
+                        std::thread::spawn(move || {
+                            let body = if text.is_empty() {
+                                "Reviewed the changes."
+                            } else {
+                                &text
+                            };
+                            match g.create_pull_request_review(&full_name, number, body, "COMMENT")
+                            {
+                                Ok(_) => {
+                                    let _ = tx.send(NetworkEvent::PrActionResult(
+                                        "Comment posted.".to_string(),
+                                    ));
+                                }
+                                Err(e) => {
+                                    let _ = tx.send(NetworkEvent::PrActionResult(format!(
+                                        "Comment failed: {e}"
+                                    )));
+                                }
+                            }
+                        });
+                    }
+                    _ => {
+                        self.status = format!("Unknown action: {action}");
+                    }
+                }
+                self.pr_pending_body.clear();
             } else if self.keybindings.matches_key("backspace", &code) {
                 self.pr_pending_body.pop();
             } else if let KeyCode::Char(ch) = code {
@@ -357,23 +350,23 @@ impl App {
                 self.focus = Focus::Tree;
                 self.status = "PR number input cancelled.".to_string();
             } else if self.keybindings.matches_key("enter", &code) {
-                    let input = self.tree_search_input.trim().to_string();
-                    if let Ok(number) = input.parse::<u64>() {
-                        if let Some(repo) = self.current_repo.clone() {
-                            self.status = format!("Loading PR #{number}...");
-                            self.focus = Focus::Tree;
-                            let g = github.clone();
-                            let full_name = repo.full_name.clone();
-                            std::thread::spawn(move || {
-                                let result = g.fetch_pull_request_detail(&full_name, number);
-                                let _ = tx.send(NetworkEvent::PrDetailResult(
-                                    result.map_err(|e| e.to_string()),
-                                ));
-                            });
-                        }
-                    } else {
-                        self.status = format!("Invalid PR number: {input}");
+                let input = self.tree_search_input.trim().to_string();
+                if let Ok(number) = input.parse::<u64>() {
+                    if let Some(repo) = self.current_repo.clone() {
+                        self.status = format!("Loading PR #{number}...");
+                        self.focus = Focus::Tree;
+                        let g = github.clone();
+                        let full_name = repo.full_name.clone();
+                        std::thread::spawn(move || {
+                            let result = g.fetch_pull_request_detail(&full_name, number);
+                            let _ = tx.send(NetworkEvent::PrDetailResult(
+                                result.map_err(|e| e.to_string()),
+                            ));
+                        });
                     }
+                } else {
+                    self.status = format!("Invalid PR number: {input}");
+                }
             } else if self.keybindings.matches_key("backspace", &code) {
                 self.tree_search_input.pop();
             } else if let KeyCode::Char(ch) = code {

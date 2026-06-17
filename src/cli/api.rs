@@ -82,11 +82,7 @@ pub fn issue_list(repo: &str, state: &str) -> Result<()> {
         };
         println!(
             "#{:>4} [{:>7}]{} {} (by {})",
-            issue.number,
-            issue.state,
-            pr_tag,
-            issue.title,
-            issue.user.login,
+            issue.number, issue.state, pr_tag, issue.title, issue.user.login,
         );
     }
     Ok(())
@@ -128,10 +124,7 @@ pub fn ci_status(repo: &str, branch: Option<&str>, workflows: bool) -> Result<()
             return Ok(());
         }
         for run in &runs {
-            let conclusion = run
-                .conclusion
-                .as_deref()
-                .unwrap_or(run.status.as_str());
+            let conclusion = run.conclusion.as_deref().unwrap_or(run.status.as_str());
             println!("  [{:>12}] {} ({})", conclusion, run.name, run.status);
         }
         return Ok(());
@@ -156,10 +149,7 @@ pub fn ci_status(repo: &str, branch: Option<&str>, workflows: bool) -> Result<()
     }
 
     for run in &runs {
-        let conclusion = run
-            .conclusion
-            .as_deref()
-            .unwrap_or(run.status.as_str());
+        let conclusion = run.conclusion.as_deref().unwrap_or(run.status.as_str());
         println!("  [{:>12}] {} ({})", conclusion, run.name, run.status);
     }
     Ok(())
@@ -176,7 +166,10 @@ pub fn compare(repo: &str, base: &str, head: &str) -> Result<()> {
 
     println!(
         "{} — {} ahead, {} behind, {} files changed",
-        cmp.status, cmp.ahead_by, cmp.behind_by, cmp.files.len()
+        cmp.status,
+        cmp.ahead_by,
+        cmp.behind_by,
+        cmp.files.len()
     );
 
     for file in &cmp.files {
@@ -222,7 +215,10 @@ pub fn release_create(
     let release = client
         .create_release(&full_name, tag_name, name, body, prerelease)
         .map_err(|e| anyhow!(helpers::handle_api_error(&full_name, &e)))?;
-    println!("✓ Release {} created: {}", release.tag_name, release.html_url);
+    println!(
+        "✓ Release {} created: {}",
+        release.tag_name, release.html_url
+    );
     Ok(())
 }
 
@@ -254,7 +250,9 @@ pub fn search(query: &str) -> Result<()> {
         let lang = repo.language.as_deref().unwrap_or("-");
         println!(
             "  {} ★{} [{}] {}",
-            repo.full_name, repo.stargazers_count, lang,
+            repo.full_name,
+            repo.stargazers_count,
+            lang,
             repo.description.as_deref().unwrap_or(""),
         );
     }

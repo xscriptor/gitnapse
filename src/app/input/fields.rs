@@ -74,52 +74,52 @@ impl App {
         if self.keybindings.matches_key("escape", &code) {
             self.focus = Focus::Preview;
         } else if self.keybindings.matches_key("enter", &code) {
-                let Some(repo) = self.current_repo.as_ref() else {
-                    self.status = "No repository loaded.".to_string();
-                    self.focus = Focus::Tree;
-                    return;
-                };
-                let Some(file_path) = self.current_preview_path.as_ref() else {
-                    self.status = "Preview a file first before downloading.".to_string();
-                    self.focus = Focus::Tree;
-                    return;
-                };
+            let Some(repo) = self.current_repo.as_ref() else {
+                self.status = "No repository loaded.".to_string();
+                self.focus = Focus::Tree;
+                return;
+            };
+            let Some(file_path) = self.current_preview_path.as_ref() else {
+                self.status = "Preview a file first before downloading.".to_string();
+                self.focus = Focus::Tree;
+                return;
+            };
 
-                let out = self.download_path_input.trim();
-                if out.is_empty() {
-                    self.status = "Download path cannot be empty.".to_string();
-                    return;
+            let out = self.download_path_input.trim();
+            if out.is_empty() {
+                self.status = "Download path cannot be empty.".to_string();
+                return;
+            }
+            let out_path = PathBuf::from(out);
+            if let Some(parent) = out_path.parent()
+                && !parent.as_os_str().is_empty()
+                && let Err(error) = std::fs::create_dir_all(parent)
+            {
+                self.status = format!("Cannot create parent folder: {error}");
+                return;
+            }
+            let branch = self.selected_branch_name();
+            match self
+                .github
+                .fetch_file_content_by_ref(&repo.full_name, file_path, &branch)
+                .and_then(|content| {
+                    std::fs::write(&out_path, content)
+                        .map_err(anyhow::Error::from)
+                        .context("Cannot write downloaded file")
+                }) {
+                Ok(()) => {
+                    self.status = format!(
+                        "Downloaded {}:{} -> {}",
+                        repo.full_name,
+                        file_path,
+                        out_path.display()
+                    );
+                    self.focus = Focus::Preview;
                 }
-                let out_path = PathBuf::from(out);
-                if let Some(parent) = out_path.parent()
-                    && !parent.as_os_str().is_empty()
-                    && let Err(error) = std::fs::create_dir_all(parent)
-                {
-                    self.status = format!("Cannot create parent folder: {error}");
-                    return;
+                Err(error) => {
+                    self.status = format!("Download failed: {error}");
                 }
-                let branch = self.selected_branch_name();
-                match self
-                    .github
-                    .fetch_file_content_by_ref(&repo.full_name, file_path, &branch)
-                    .and_then(|content| {
-                        std::fs::write(&out_path, content)
-                            .map_err(anyhow::Error::from)
-                            .context("Cannot write downloaded file")
-                    }) {
-                    Ok(()) => {
-                        self.status = format!(
-                            "Downloaded {}:{} -> {}",
-                            repo.full_name,
-                            file_path,
-                            out_path.display()
-                        );
-                        self.focus = Focus::Preview;
-                    }
-                    Err(error) => {
-                        self.status = format!("Download failed: {error}");
-                    }
-                }
+            }
         } else if self.keybindings.matches_key("delete", &code) {
             self.download_path_input.clear();
         } else if self.keybindings.matches_key("backspace", &code) {

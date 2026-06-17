@@ -75,7 +75,10 @@ pub fn list_available_themes() -> Vec<String> {
     }
 
     if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
-        collect_themes_from(&std::path::PathBuf::from(manifest_dir).join("themes"), &mut names);
+        collect_themes_from(
+            &std::path::PathBuf::from(manifest_dir).join("themes"),
+            &mut names,
+        );
     }
 
     names.sort();
@@ -121,7 +124,10 @@ fn nav_labels(kb: &KeybindingsConfig) -> Vec<String> {
     }
     vec![
         format!(" {} Search ", key_str(std::slice::from_ref(&kb.search))),
-        format!(" {} Open/Preview ", key_str(std::slice::from_ref(&kb.enter))),
+        format!(
+            " {} Open/Preview ",
+            key_str(std::slice::from_ref(&kb.enter))
+        ),
         format!(" {}/{} Move ", kb.scroll_up, kb.scroll_down),
         format!(" {} Prev Page ", key_str(&kb.page_left)),
         format!(" {} Next Page ", key_str(&kb.page_right)),

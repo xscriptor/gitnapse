@@ -309,9 +309,8 @@ impl App {
                     let branch = self.selected_branch_name();
                     std::thread::spawn(move || {
                         let result = g.fetch_workflow_runs(&full_name, &branch, 30);
-                        let _ = tx.send(NetworkEvent::WorkflowRunsResult(
-                            result.unwrap_or_default(),
-                        ));
+                        let _ =
+                            tx.send(NetworkEvent::WorkflowRunsResult(result.unwrap_or_default()));
                     });
                 } else {
                     self.status = "Open a repository first.".to_string();
@@ -379,8 +378,7 @@ impl App {
                         self.status = format!("Cloning {} repo(s) to {}...", count, dest);
                         std::thread::spawn(move || {
                             for repo in &selected {
-                                let repo_path =
-                                    std::path::PathBuf::from(&dest).join(&repo.name);
+                                let repo_path = std::path::PathBuf::from(&dest).join(&repo.name);
                                 if repo_path.exists() {
                                     log::info!("Skipping {} (already exists)", repo.full_name);
                                     continue;
