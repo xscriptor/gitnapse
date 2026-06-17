@@ -2,7 +2,6 @@ use crate::error::GitHubError;
 use crate::github::{GitHubClient, MeQuery, with_retry};
 use crate::models::{BranchInfo, RepoNode, RepoSummary, SearchResponse, TreeResponse};
 
-#[allow(dead_code)]
 impl GitHubClient {
     pub fn search_repositories_page(
         &self,
@@ -244,7 +243,6 @@ impl GitHubClient {
     }
 
     /// Fetch a single repository by full name (e.g. "owner/repo").
-    #[allow(dead_code)]
     pub fn fetch_repo_by_name(&self, full_name: &str) -> Result<RepoSummary, GitHubError> {
         let full_name = full_name.to_string();
         Self::get_runtime().block_on(self.async_fetch_repo_by_name(full_name))

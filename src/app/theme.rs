@@ -1,4 +1,4 @@
-use crate::config::{ThemeConfig, strip_jsonc_comments};
+use crate::config::{KeybindingsConfig, ThemeConfig, config_dir, strip_jsonc_comments};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use std::sync::OnceLock;
@@ -28,7 +28,6 @@ pub fn init_theme(config: &ThemeConfig) {
     let _ = PALETTE.set(config.palette.clone());
 }
 
-#[allow(dead_code)]
 pub fn load_theme_by_name(name: &str) -> ThemeConfig {
     let dir = match crate::config::config_dir() {
         Ok(d) => d.join("themes"),
@@ -44,6 +43,43 @@ pub fn load_theme_by_name(name: &str) -> ThemeConfig {
         }
     }
     ThemeConfig::default()
+}
+
+fn collect_themes_from(dir: &std::path::Path, names: &mut Vec<String>) {
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().is_some_and(|ext| ext == "jsonc")
+                && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
+            {
+                let s = stem.to_string();
+                if !names.contains(&s) {
+                    names.push(s);
+                }
+            }
+        }
+    }
+}
+
+pub fn list_available_themes() -> Vec<String> {
+    let mut names = Vec::new();
+
+    if let Ok(dir) = config_dir() {
+        collect_themes_from(&dir.join("themes"), &mut names);
+    }
+
+    if let Ok(exe_dir) = std::env::current_exe()
+        && let Some(parent) = exe_dir.parent()
+    {
+        collect_themes_from(&parent.join("../themes"), &mut names);
+    }
+
+    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+        collect_themes_from(&std::path::PathBuf::from(manifest_dir).join("themes"), &mut names);
+    }
+
+    names.sort();
+    names
 }
 
 fn palette() -> &'static Vec<[u8; 3]> {
@@ -79,31 +115,34 @@ pub fn selection_style(index: usize) -> Style {
         .add_modifier(Modifier::BOLD)
 }
 
-fn nav_labels() -> [&'static str; 17] {
-    [
-        " / Search ",
-        " Enter Open/Preview ",
-        " ↑/↓ Move ",
-        " ← Prev Page ",
-        " → Next Page ",
-        " Tab Repos/Tree/Preview ",
-        " PgUp/PgDn Preview ",
-        " Home/End Preview ",
-        " b Branch ",
-        " f Find File ",
-        " v Tree View ",
-        " d Download File ",
-        " c Clone ",
-        " t Token ",
-        " o OAuth State ",
-        " Esc Back ",
-        " Mouse Click/Scroll ",
+fn nav_labels(kb: &KeybindingsConfig) -> Vec<String> {
+    fn key_str(keys: &[String]) -> String {
+        keys.join("/")
+    }
+    vec![
+        format!(" {} Search ", key_str(std::slice::from_ref(&kb.search))),
+        format!(" {} Open/Preview ", key_str(std::slice::from_ref(&kb.enter))),
+        format!(" {}/{} Move ", kb.scroll_up, kb.scroll_down),
+        format!(" {} Prev Page ", key_str(&kb.page_left)),
+        format!(" {} Next Page ", key_str(&kb.page_right)),
+        format!(" {} Repos/Tree/Preview ", kb.focus_next),
+        format!(" {}/{} Preview ", kb.page_up, kb.page_down),
+        format!(" {}/{} Preview ", kb.home, kb.end),
+        format!(" {} Branch ", kb.branch_picker),
+        format!(" {} Find File ", kb.file_search),
+        format!(" {} Tree View ", kb.tree_view),
+        format!(" {} Download File ", kb.download),
+        format!(" {} Clone ", kb.clone),
+        format!(" {} Token ", kb.token_input),
+        format!(" {} OAuth State ", kb.oauth_status),
+        format!(" {} Back ", kb.escape),
+        " Mouse Click/Scroll ".to_string(),
     ]
 }
 
-pub fn nav_hint_lines(max_width: usize) -> Vec<Line<'static>> {
+pub fn nav_hint_lines(kb: &KeybindingsConfig, max_width: usize) -> Vec<Line<'static>> {
     let width = max_width.max(20);
-    let labels = nav_labels();
+    let labels = nav_labels(kb);
     let mut lines: Vec<Line<'static>> = Vec::new();
     let mut current: Vec<Span<'static>> = Vec::new();
     let mut current_width = 0usize;
@@ -115,7 +154,7 @@ pub fn nav_hint_lines(max_width: usize) -> Vec<Line<'static>> {
             current = Vec::new();
             current_width = 0;
         }
-        current.push(Span::styled((*label).to_string(), selection_style(index)));
+        current.push(Span::styled(label.to_string(), selection_style(index)));
         current_width += label_w;
     }
 

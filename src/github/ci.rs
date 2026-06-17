@@ -2,7 +2,6 @@ use crate::error::GitHubError;
 use crate::github::{GitHubClient, with_retry};
 use crate::models::{CheckRun, CheckRunsResponse, WorkflowRun, WorkflowRunsResponse};
 
-#[allow(dead_code)]
 impl GitHubClient {
     /// Fetch check runs for a specific commit ref.
     pub fn fetch_check_runs(
@@ -31,7 +30,6 @@ impl GitHubClient {
     }
 
     /// Fetch workflow runs for a branch.
-    #[allow(dead_code)]
     pub fn fetch_workflow_runs(
         &self,
         full_name: &str,

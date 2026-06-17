@@ -294,6 +294,21 @@ impl App {
             NetworkEvent::PrActionResult(msg) => {
                 self.status = msg;
             }
+            NetworkEvent::WorkflowRunsResult(runs) => {
+                let count = runs.len();
+                self.command_items = runs
+                    .into_iter()
+                    .map(|r| {
+                        let conclusion = r.conclusion.as_deref().unwrap_or("pending");
+                        format!("[WF] {}: {}", r.name, conclusion)
+                    })
+                    .collect();
+                self.command_filtered.clear();
+                self.command_cursor = 0;
+                self.command_palette_visible = true;
+                self.command_input.clear();
+                self.status = format!("Workflow runs: {}", count);
+            }
         }
     }
 }

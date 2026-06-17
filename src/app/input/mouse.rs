@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 impl App {
     pub(crate) fn handle_mouse_click(&mut self, col: u16, row: u16, terminal_area: Rect) {
-        let Some(panes) = app::render::compute_panes(terminal_area, self.current_repo.is_some())
+        let Some(panes) = app::render::compute_panes(terminal_area, self.current_repo.is_some(), &self.keybindings)
         else {
             return;
         };
@@ -52,7 +52,7 @@ impl App {
         up: bool,
         terminal_area: Rect,
     ) {
-        let Some(panes) = app::render::compute_panes(terminal_area, self.current_repo.is_some())
+        let Some(panes) = app::render::compute_panes(terminal_area, self.current_repo.is_some(), &self.keybindings)
         else {
             return;
         };

@@ -93,7 +93,6 @@ impl PreviewCache {
     }
 
     /// Returns the stored ETag for a given cache entry, if one exists.
-    #[allow(dead_code)]
     pub fn get_etag(&self, repo: &str, branch: &str, path: &str) -> Option<&str> {
         let key = cache_key(repo, branch, path);
         self.etag.get(&key).map(|s| s.as_str())

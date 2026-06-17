@@ -2,7 +2,6 @@ use crate::error::GitHubError;
 use crate::github::{GitHubClient, with_retry};
 use crate::models::{CommitInfo, CompareResponse};
 
-#[allow(dead_code)]
 impl GitHubClient {
     /// Fetch recent commits for a branch.
     pub fn fetch_recent_commits(
