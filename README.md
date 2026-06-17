@@ -105,6 +105,7 @@ wget -qO- https://raw.githubusercontent.com/xscriptor/gitnapse/main/scripts/inst
   <li><a href="./docs/INSTALLATION.md"><code>INSTALLATION.md</code></a> - full install and uninstall by platform</li>
   <li><a href="./docs/REMOTE_INSTALLATION.md"><code>REMOTE_INSTALLATION.md</code></a> - remote scripts, parameters, and examples</li>
   <li><a href="./docs/USAGE.md"><code>USAGE.md</code></a> - full command and in-app usage guide</li>
+  <li><a href="./docs/GITNAPSE_CLI.md"><code>GITNAPSE_CLI.md</code></a> - CLI command reference for clone, commit, push, status, log, branch, and PR management</li>
   <li><a href="./docs/OAUTH_AUTHENTICATION.md"><code>OAUTH_AUTHENTICATION.md</code></a> - OAuth login flows with octocrab and secure setup</li>
   <li><a href="./docs/THEME_CONFIG.md"><code>THEME_CONFIG.md</code></a> - theme file format and customization</li>
   <li><a href="./docs/COLLABORATIVE_SECTION.md"><code>COLLABORATIVE_SECTION.md</code></a> - branch protection, PR workflow, and release publishing collaboration guide</li>

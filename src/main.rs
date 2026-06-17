@@ -1,6 +1,7 @@
 mod app;
 mod auth;
 mod cache;
+mod cli_commands;
 mod config;
 mod error;
 mod github;
@@ -37,6 +38,23 @@ enum Command {
         #[command(subcommand)]
         action: AuthAction,
     },
+    /// Clone a repository (via API + git)
+    Clone(CloneArgs),
+    /// Stage all changes and commit with a message
+    Commit(CommitArgs),
+    /// Push commits to remote
+    Push(PushArgs),
+    /// Show working tree status
+    Status,
+    /// Show commit log (default: 20 entries)
+    Log(LogArgs),
+    /// List local branches
+    Branch,
+    /// Manage pull requests via GitHub API
+    Pr {
+        #[command(subcommand)]
+        action: PrAction,
+    },
 }
 
 #[derive(Debug, Clone, Args)]
@@ -69,6 +87,83 @@ struct DownloadFileArgs {
     /// Output local file path
     #[arg(long)]
     out: PathBuf,
+}
+
+#[derive(Debug, Clone, Args)]
+struct CloneArgs {
+    /// Repository (owner/repo or full git URL), optionally with :branch suffix
+    repo: String,
+}
+
+#[derive(Debug, Clone, Args)]
+struct CommitArgs {
+    /// Commit message
+    #[arg(short = 'm')]
+    message: String,
+}
+
+#[derive(Debug, Clone, Args)]
+struct PushArgs {
+    /// Remote name (default: origin)
+    remote: Option<String>,
+    /// Branch name
+    branch: Option<String>,
+}
+
+#[derive(Debug, Clone, Args)]
+struct LogArgs {
+    /// Number of commits to show
+    #[arg(short = 'n', default_value_t = 20)]
+    count: usize,
+}
+
+#[derive(Debug, Subcommand)]
+enum PrAction {
+    /// List pull requests for a repository
+    List(PrListArgs),
+    /// Create a pull request
+    Create(PrCreateArgs),
+    /// Merge a pull request
+    Merge(PrMergeArgs),
+}
+
+#[derive(Debug, Clone, Args)]
+struct PrListArgs {
+    /// Full repository name, e.g. owner/repo
+    repo: String,
+    /// PR state: open, closed, all
+    #[arg(short = 's', long, default_value = "open")]
+    state: String,
+}
+
+#[derive(Debug, Clone, Args)]
+struct PrCreateArgs {
+    /// Full repository name, e.g. owner/repo
+    repo: String,
+    /// PR title
+    #[arg(short = 't', long)]
+    title: String,
+    /// Head (source) branch
+    #[arg(short = 'H', long)]
+    head: String,
+    /// Base (target) branch
+    #[arg(short = 'B', long)]
+    base: String,
+    /// PR body / description
+    #[arg(short = 'b', long)]
+    body: Option<String>,
+}
+
+#[derive(Debug, Clone, Args)]
+struct PrMergeArgs {
+    /// Full repository name, e.g. owner/repo
+    repo: String,
+    /// Pull request number
+    #[arg(short = 'n', long)]
+    number: u64,
+    /// Merge method: merge, squash, or rebase
+    #[arg(short = 'm', long)]
+    method: Option<String>,
 }
 
 impl From<RunArgs> for app::RunOptions {
@@ -126,6 +221,23 @@ fn main() -> Result<()> {
     match cli.command {
         Some(Command::Run(args)) => app::run_with_options(args.into()),
         Some(Command::DownloadFile(args)) => download_file_cli(args),
+        Some(Command::Clone(args)) => cli_commands::clone_repo(&args.repo),
+        Some(Command::Commit(args)) => cli_commands::commit(&args.message),
+        Some(Command::Push(args)) => {
+            cli_commands::push(args.remote.as_deref(), args.branch.as_deref())
+        }
+        Some(Command::Status) => cli_commands::status(),
+        Some(Command::Log(args)) => cli_commands::log_lines(args.count),
+        Some(Command::Branch) => cli_commands::branch(),
+        Some(Command::Pr { action }) => match action {
+            PrAction::List(args) => cli_commands::pr_list(&args.repo, &args.state),
+            PrAction::Create(args) => {
+                cli_commands::pr_create(&args.repo, &args.title, &args.head, &args.base, args.body.as_deref())
+            }
+            PrAction::Merge(args) => {
+                cli_commands::pr_merge(&args.repo, args.number, args.method.as_deref())
+            }
+        },
         Some(Command::Auth { action }) => match action {
             AuthAction::Set { token } => auth::set_token_cli(token),
             AuthAction::Clear => auth::clear_token_cli(),
@@ -149,7 +261,6 @@ fn download_file_cli(args: DownloadFileArgs) -> Result<()> {
 
     let bytes = match args.r#ref {
         Some(branch) if !branch.trim().is_empty() => {
-            // Contents API supports a ref query; fallback by branch tree/content path behavior
             client.fetch_file_content_by_ref(&args.repo, &args.path, &branch)?
         }
         _ => client.fetch_file_content(&args.repo, &args.path)?,
