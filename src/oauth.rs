@@ -1,23 +1,10 @@
 use crate::auth;
-use crate::github::GitHubClient;
 use crate::oauth_session;
 use anyhow::{Context, Result, anyhow};
 use reqwest::header::ACCEPT;
 use secrecy::{ExposeSecret, SecretString};
 use std::process::Command;
-use std::sync::OnceLock;
 use std::time::Duration;
-use tokio::runtime::Runtime;
-
-fn get_runtime() -> &'static Runtime {
-    static RUNTIME: OnceLock<Runtime> = OnceLock::new();
-    RUNTIME.get_or_init(|| {
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("Cannot create tokio runtime")
-    })
-}
 
 const ENV_OAUTH_CLIENT_ID: &str = "GITNAPSE_GITHUB_OAUTH_CLIENT_ID";
 const ENV_GITHUB_CLIENT_ID: &str = "GITHUB_CLIENT_ID";
@@ -105,7 +92,7 @@ pub fn oauth_device_login_cli(
     };
 
     let device_credential = SecretString::new(client_id.clone().into());
-    let runtime = get_runtime();
+    let runtime = crate::runtime::get_runtime();
 
     let (crab, device_codes) = runtime
         .block_on(async {
@@ -164,12 +151,15 @@ pub fn oauth_device_login_cli(
     oauth_session::save_from_oauth(&oauth, &client_id)
         .context("Cannot store OAuth session metadata")?;
 
-    let login = GitHubClient::new(Some(&access_token))
-        .context("Cannot validate OAuth token with API client")?
-        .fetch_authenticated_user()
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| "unknown user".to_string());
+    let login = crate::provider::create_provider(
+        crate::provider::ProviderKind::GitHub,
+        Some(&access_token),
+    )
+    .map_err(|e| anyhow!("{e}"))?
+    .fetch_authenticated_user()
+    .ok()
+    .flatten()
+    .unwrap_or_else(|| "unknown user".to_string());
 
     println!("OAuth login completed. Token saved securely for user: {login}");
     Ok(())
@@ -186,7 +176,10 @@ pub fn oauth_status_cli() -> Result<()> {
         return Ok(());
     }
 
-    let client = GitHubClient::new(token.as_deref())?;
+    let client = crate::provider::create_provider(
+        crate::provider::ProviderKind::GitHub,
+        token.as_deref(),
+    )?;
     let user = client.fetch_authenticated_user()?;
     let authenticated = user.is_some();
 

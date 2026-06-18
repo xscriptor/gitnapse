@@ -1,9 +1,7 @@
 use super::{App, Focus, TerminalGuard};
 use crate::auth;
-use crate::github::GitHubClient;
 use crate::oauth;
 use crate::syntax::highlight_content;
-use anyhow::Context;
 use crossterm::event::DisableMouseCapture;
 use crossterm::execute;
 use crossterm::terminal::{LeaveAlternateScreen, disable_raw_mode};
@@ -11,7 +9,6 @@ use ratatui::text::Line;
 use std::io::stdout;
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::Arc;
 
 impl App {
     pub(crate) fn search(&mut self) {
@@ -59,8 +56,7 @@ impl App {
         self.status = "Loading...".to_string();
         let mut branches = match self.github.fetch_branches(&repo.full_name) {
             Ok(items) if !items.is_empty() => items,
-            Ok(_) => vec![repo.default_branch.clone()],
-            Err(_) => vec![repo.default_branch.clone()],
+            Ok(_) | Err(_) => vec![repo.default_branch.clone()],
         };
         branches.sort();
         branches.dedup();
@@ -74,8 +70,7 @@ impl App {
                 self.account
                     .last_branch_by_repo
                     .get(&repo.full_name)
-                    .map(|saved| saved == branch)
-                    .unwrap_or(false)
+                    .is_some_and(|saved| saved == branch)
             })
             .or_else(|| self.branches.iter().position(|b| b == &repo.default_branch))
             .unwrap_or(0);
@@ -237,10 +232,14 @@ impl App {
         }
 
         match auth::save_token(&token_trimmed).and_then(|_| {
-            GitHubClient::new(Some(&token_trimmed)).context("Cannot rebuild HTTP client")
+            crate::provider::create_provider(
+                crate::provider::ProviderKind::GitHub,
+                Some(&token_trimmed),
+            )
+            .map_err(|e| anyhow::anyhow!("{e}"))
         }) {
-            Ok(client) => {
-                self.github = Arc::new(client);
+            Ok(provider) => {
+                self.github = provider;
                 self.auth_user = self.github.fetch_authenticated_user().ok().flatten();
                 self.status = match self.auth_user.as_ref() {
                     Some(login) => format!("Token saved and validated as {login}."),
@@ -283,9 +282,12 @@ impl App {
         match oauth_result {
             Ok(()) => {
                 if let Ok(token) = auth::load_token()
-                    && let Ok(client) = GitHubClient::new(token.as_deref())
+                    && let Ok(provider) = crate::provider::create_provider(
+                        crate::provider::ProviderKind::GitHub,
+                        token.as_deref(),
+                    )
                 {
-                    self.github = Arc::new(client);
+                    self.github = provider;
                     self.auth_user = self.github.fetch_authenticated_user().ok().flatten();
                 }
                 self.status = "OAuth login completed and session saved.".to_string();
@@ -300,5 +302,44 @@ impl App {
         } else {
             Focus::Repos
         };
+    }
+
+    pub(crate) fn toggle_tree_view(&mut self) {
+        if self.current_repo.is_none() {
+            self.status = "Open a repository first.".to_string();
+            return;
+        }
+        self.tree_text_mode = !self.tree_text_mode;
+        self.preview_scroll = 0;
+        if self.tree_text_mode {
+            let branch = self.selected_branch_name();
+            self.preview_title = format!(
+                "tree {} [{}]",
+                self.current_repo
+                    .as_ref()
+                    .map(|r| r.full_name.clone())
+                    .unwrap_or_default(),
+                branch
+            );
+            self.preview_lines = self
+                .tree_all
+                .iter()
+                .map(|node| {
+                    let indent = "  ".repeat(node.depth.min(20));
+                    let icon = if node.is_dir { "[D]" } else { "[F]" };
+                    Line::from(format!("{indent}{icon} {}", node.path))
+                })
+                .collect();
+            self.current_preview_path = None;
+            self.focus = Focus::Preview;
+            self.status = "Tree view enabled in preview pane.".to_string();
+        } else {
+            self.preview_title = "Preview".to_string();
+            self.preview_lines = vec![Line::from(
+                "Tree preview disabled. Select a file and press Enter to preview.",
+            )];
+            self.focus = Focus::Tree;
+            self.status = "Tree view disabled.".to_string();
+        }
     }
 }

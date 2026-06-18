@@ -3,7 +3,8 @@ use std::process::Command;
 
 use crate::auth;
 use crate::error::GitHubError;
-use crate::github::GitHubClient;
+use crate::provider::GitProvider;
+use std::sync::Arc;
 
 // ── Git helpers ─────────────────────────────────────────────────────────
 
@@ -108,28 +109,33 @@ pub fn resolve_full_name(repo: &str) -> Result<String> {
 
 // ── API helpers ─────────────────────────────────────────────────────────
 
-pub fn handle_api_error(full_name: &str, e: &GitHubError) -> String {
-    match e {
-        GitHubError::Api { status, body } if *status == 404 || body.contains("Not Found") => {
+pub fn handle_api_error(full_name: &str, e: &anyhow::Error) -> String {
+    let msg = e
+        .downcast_ref::<GitHubError>()
+        .map(|gh_err| match gh_err {
+            GitHubError::Api { status, body } if *status == 404 || body.contains("Not Found") => {
             format!("repository '{full_name}' not found on GitHub")
         }
         GitHubError::Unauthorized => {
             "authentication required — run 'gitnapse auth set' or 'gitnapse auth oauth login'"
                 .to_string()
         }
-        GitHubError::RateLimited {
-            remaining: _,
-            reset,
-        } => {
-            format!("GitHub API rate limit exceeded — resets at timestamp {reset}")
-        }
-        _ => format!("{e}"),
-    }
+            GitHubError::RateLimited {
+                remaining: _,
+                reset,
+            } => {
+                format!("GitHub API rate limit exceeded — resets at timestamp {reset}")
+            }
+            _ => format!("{gh_err}"),
+        })
+        .unwrap_or_else(|| format!("{e}"));
+    msg
 }
 
-pub fn make_client() -> Result<GitHubClient> {
+pub fn make_client() -> Result<Arc<dyn GitProvider>> {
     let token = auth::load_token()?;
-    GitHubClient::new(token.as_deref()).map_err(|e| anyhow!("failed to create HTTP client: {e}"))
+    crate::provider::create_provider(crate::provider::ProviderKind::GitHub, token.as_deref())
+        .map_err(|e| anyhow!("failed to create HTTP client: {e}"))
 }
 
 #[cfg(test)]
@@ -252,27 +258,27 @@ mod tests {
 
     #[test]
     fn test_handle_api_error_404() {
-        let err = GitHubError::Api {
+        let err = anyhow::Error::from(GitHubError::Api {
             status: 404,
             body: "Not Found".to_string(),
-        };
+        });
         let msg = handle_api_error("test/repo", &err);
         assert_eq!(msg, "repository 'test/repo' not found on GitHub");
     }
 
     #[test]
     fn test_handle_api_error_unauthorized() {
-        let err = GitHubError::Unauthorized;
+        let err: anyhow::Error = anyhow::Error::from(GitHubError::Unauthorized);
         let msg = handle_api_error("test/repo", &err);
         assert!(msg.contains("authentication required"));
     }
 
     #[test]
     fn test_handle_api_error_rate_limited() {
-        let err = GitHubError::RateLimited {
+        let err = anyhow::Error::from(GitHubError::RateLimited {
             remaining: 0,
             reset: 12345,
-        };
+        });
         let msg = handle_api_error("test/repo", &err);
         assert!(msg.contains("rate limit exceeded"));
     }

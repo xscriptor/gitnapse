@@ -8,11 +8,12 @@ mod theme;
 use crate::auth;
 use crate::cache::PreviewCache;
 use crate::config::{AccountConfig, KeybindingsConfig, ThemeConfig};
-use crate::github::GitHubClient;
 use crate::models::{
     CheckRun, CommitInfo, CompareResponse, Issue, MergeResponse, PullRequest, PullRequestDetail,
     PullRequestReview, RepoNode, RepoSummary, ReviewComment,
 };
+use crate::provider::GitProvider;
+use crate::task_manager::TaskManager;
 use anyhow::{Context, Result, anyhow};
 use crossterm::event::{
     self, DisableMouseCapture, EnableMouseCapture, Event, KeyEventKind, MouseButton, MouseEventKind,
@@ -96,9 +97,10 @@ pub enum Focus {
 
 pub struct App {
     // Services
-    pub github: Arc<GitHubClient>,
+    pub github: Arc<dyn GitProvider>,
     pub account: AccountConfig,
     pub preview_cache: PreviewCache,
+    pub task_manager: TaskManager,
 
     // Search state
     pub search_query: String,
@@ -170,7 +172,10 @@ impl App {
 
     fn new(options: RunOptions) -> Result<Self> {
         let token = auth::load_token()?;
-        let github = Arc::new(GitHubClient::new(token.as_deref())?);
+        let github = crate::provider::create_provider(
+            crate::provider::ProviderKind::GitHub,
+            token.as_deref(),
+        )?;
         let mut account = AccountConfig::load_or_default()?;
         let theme_config = ThemeConfig::load_or_default();
         theme::init_theme(&theme_config);
@@ -189,6 +194,7 @@ impl App {
             github,
             account: account.clone(),
             preview_cache,
+            task_manager: TaskManager::new(),
             search_query: options.initial_query,
             search_page: options.initial_page.max(1),
             per_page: options.per_page.clamp(1, 100),
@@ -328,7 +334,7 @@ pub fn run_with_options(options: RunOptions) -> Result<()> {
     let query = app.search_query.clone();
     let page = app.search_page;
     let per_page = app.per_page;
-    std::thread::spawn(move || {
+    app.task_manager.spawn(move || {
         let result = g.search_repositories_page(&query, page, per_page);
         let _ = tx.send(NetworkEvent::SearchResult(
             result.map_err(|e| e.to_string()),
@@ -383,6 +389,7 @@ pub fn run_with_options(options: RunOptions) -> Result<()> {
     disable_raw_mode().ok();
     execute!(stdout(), LeaveAlternateScreen, DisableMouseCapture).ok();
     terminal.show_cursor().ok();
+    app.task_manager.join_all();
     let _ = panic::take_hook(); // remove our hook
     terminal_result
 }
@@ -401,12 +408,17 @@ mod tests {
 
     fn test_app() -> App {
         App {
-            github: Arc::new(crate::github::GitHubClient::new(None).expect("client")),
+            github: crate::provider::create_provider(
+                crate::provider::ProviderKind::GitHub,
+                None,
+            )
+            .expect("client"),
             account: crate::config::AccountConfig {
                 preferred_clone_dir: ".".to_string(),
                 last_branch_by_repo: Default::default(),
             },
             preview_cache: crate::cache::PreviewCache::new(120).expect("cache"),
+            task_manager: TaskManager::new(),
             search_query: String::new(),
             search_page: 1,
             per_page: 30,
@@ -607,12 +619,17 @@ mod tests {
     #[test]
     fn lazy_tree_progress_advances_limit() {
         let mut app = App {
-            github: Arc::new(crate::github::GitHubClient::new(None).expect("client")),
+            github: crate::provider::create_provider(
+                crate::provider::ProviderKind::GitHub,
+                None,
+            )
+            .expect("client"),
             account: crate::config::AccountConfig {
                 preferred_clone_dir: ".".to_string(),
                 last_branch_by_repo: Default::default(),
             },
             preview_cache: crate::cache::PreviewCache::new(120).expect("cache"),
+            task_manager: TaskManager::new(),
             search_query: String::new(),
             search_page: 1,
             per_page: 30,

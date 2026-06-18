@@ -1,5 +1,45 @@
 # Changelog
 
+## v0.1.2
+
+### Added
+
+- **GitProvider trait**: New `GitProvider` trait in `src/provider.rs` abstracts all GitHub API methods (~28 methods), enabling future support for Azure DevOps, GitLab, and other providers. (`src/provider.rs`, `src/github/provider_impl.rs`)
+
+- **Provider auto-detection**: `detect_provider(url)` function parses git remote URLs to identify GitHub, Azure DevOps, GitLab, Bitbucket, and other providers. (`src/provider.rs`)
+
+- **Provider factory**: `create_provider(kind, token)` returns `Arc<dyn GitProvider>`, making provider selection a single call site. (`src/provider.rs`)
+
+- **TaskManager**: New `TaskManager` in `src/task_manager.rs` tracks all background `JoinHandle`s instead of discarding them. Threads are named `"gitnapse-worker"` for debugging. (`src/task_manager.rs`)
+
+- **Graceful shutdown**: `task_manager.join_all()` is called before the TUI exits, ensuring all background threads complete cleanly. (`src/app/mod.rs`)
+
+- **OAuthSession zeroize on drop**: `OAuthSession` now implements `Drop` to zeroize `access_token` and `refresh_token` fields when the session is dropped. (`src/oauth_session.rs`)
+
+### Changed
+
+- **Unified tokio runtime**: Three separate `OnceLock<Runtime>` instances (GitHubClient, oauth, oauth_session) consolidated into a single shared runtime at `src/runtime.rs`. (`src/runtime.rs`, `src/github/mod.rs`, `src/oauth.rs`, `src/oauth_session.rs`)
+
+- **Threads migrated to TaskManager**: All 19 `std::thread::spawn` calls replaced with `self.task_manager.spawn()`, providing thread tracking, naming, and cleanup. (`src/app/commands.rs`, `src/app/input/nav.rs`)
+
+- **Token input no longer exposes secret on every keypress**: `handle_token_input` now accumulates characters in a plain `String` (reusing `input_buffer`) and only creates a `SecretString` when saving on Enter, eliminating heap copies of the secret on each keystroke. (`src/app/input/fields.rs`)
+
+- **Main.rs dispatch refactored**: The ~40-arm match in `main()` extracted into 9 named `dispatch_*` functions (dispatch_stash, dispatch_tag, dispatch_pr, dispatch_issue, dispatch_remote, dispatch_config, dispatch_release, dispatch_repo, dispatch_auth, dispatch_oauth). (`src/main.rs`)
+
+- **Cache write errors logged**: `fs::write` failures in cache are now logged via `log::warn!` instead of being silently discarded. (`src/cache.rs`)
+
+- **Test env var safety**: Replaced `unsafe { std::env::set_var }` in integration tests and `auth_precedence_tests` with `temp_env::with_var`. (`src/github/mod.rs`, `tests/auth_precedence_tests.rs`)
+
+- **handle_api_error accepts anyhow::Error**: The CLI error handler now takes `&anyhow::Error` and downcasts to `GitHubError` internally, making it compatible with the new `GitProvider` trait. (`src/cli/helpers.rs`)
+
+- **Duplicate tree_text_mode logic removed**: Extracted to a single `toggle_tree_view()` method in `App`, called from both `commands.rs` and `nav.rs`. (`src/app/actions.rs`)
+
+- **Unused imports cleaned up**: Removed stale `Arc`, `Context`, `GitHubClient`, `Line`, and `GitProvider` imports across actions.rs, commands.rs, git.rs, and oauth.rs.
+
+### Fixed
+
+- **#![allow(dead_code)] removed from 5 files**: Replaced crate-level allows with specific fields or `Drop` implementations where needed. (`src/error.rs`, `src/models/repo.rs`, `src/models/pr.rs`, `src/models/misc.rs`, `src/models/release.rs`)
+
 ## v0.1.1
 
 ### Fixed

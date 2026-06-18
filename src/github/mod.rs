@@ -1,16 +1,16 @@
 use crate::error::GitHubError;
+use crate::runtime;
 use reqwest::Client;
 use reqwest::Response;
 use reqwest::header::{ACCEPT, AUTHORIZATION, HeaderMap, HeaderValue, USER_AGENT};
 use std::sync::Mutex;
-use std::sync::OnceLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::runtime::Runtime;
 
 mod ci;
 mod compare;
 mod content;
 mod prs;
+mod provider_impl;
 mod releases;
 mod repos;
 
@@ -231,14 +231,8 @@ impl GitHubClient {
         })
     }
 
-    pub fn get_runtime() -> &'static Runtime {
-        static RUNTIME: OnceLock<Runtime> = OnceLock::new();
-        RUNTIME.get_or_init(|| {
-            tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .expect("Cannot create global tokio runtime for GitHubClient")
-        })
+    pub fn get_runtime() -> &'static tokio::runtime::Runtime {
+        runtime::get_runtime()
     }
 }
 
@@ -349,15 +343,7 @@ mod integration_tests {
     use serial_test::serial;
 
     fn with_api_base<T>(base: &str, test: impl FnOnce() -> T) -> T {
-        let prev = std::env::var("GITNAPSE_GITHUB_API").ok();
-        unsafe { std::env::set_var("GITNAPSE_GITHUB_API", base) };
-        let out = test();
-        if let Some(value) = prev {
-            unsafe { std::env::set_var("GITNAPSE_GITHUB_API", value) };
-        } else {
-            unsafe { std::env::remove_var("GITNAPSE_GITHUB_API") };
-        }
-        out
+        temp_env::with_var("GITNAPSE_GITHUB_API", Some(base), test)
     }
 
     #[test]
