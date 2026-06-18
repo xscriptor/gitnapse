@@ -1,7 +1,33 @@
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyCode, KeyModifiers};
 use serde::{Deserialize, Serialize};
 
 use crate::config::{config_dir, strip_jsonc_comments};
+
+/// Parsed keybinding: keycode plus optional modifiers.
+#[derive(Debug, Clone)]
+pub(crate) struct BoundKey {
+    pub(crate) code: KeyCode,
+    pub(crate) modifiers: KeyModifiers,
+}
+
+/// Parse a keybinding string that may include a modifier prefix.
+/// Supported: `"Ctrl+p"`, `"Shift+Tab"`, `"q"`, `"F1"`, etc.
+fn parse_keybinding(s: &str) -> Option<BoundKey> {
+    let s = s.trim();
+    if let Some(rest) = s.strip_prefix("Ctrl+").or_else(|| s.strip_prefix("ctrl+")) {
+        let code = str_to_keycode(rest)?;
+        Some(BoundKey { code, modifiers: KeyModifiers::CONTROL })
+    } else if let Some(rest) = s.strip_prefix("Shift+").or_else(|| s.strip_prefix("shift+")) {
+        let code = str_to_keycode(rest)?;
+        Some(BoundKey { code, modifiers: KeyModifiers::SHIFT })
+    } else if let Some(rest) = s.strip_prefix("Alt+").or_else(|| s.strip_prefix("alt+")) {
+        let code = str_to_keycode(rest)?;
+        Some(BoundKey { code, modifiers: KeyModifiers::ALT })
+    } else {
+        let code = str_to_keycode(s)?;
+        Some(BoundKey { code, modifiers: KeyModifiers::NONE })
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeybindingsConfig {
@@ -28,6 +54,7 @@ pub struct KeybindingsConfig {
     pub escape: String,
     pub backspace: String,
     pub delete: String,
+    pub command_palette: String,
 }
 
 impl Default for KeybindingsConfig {
@@ -56,6 +83,7 @@ impl Default for KeybindingsConfig {
             escape: "Esc".into(),
             backspace: "Backspace".into(),
             delete: "Delete".into(),
+            command_palette: "Ctrl+p".into(),
         }
     }
 }
@@ -106,14 +134,28 @@ impl KeybindingsConfig {
             "escape" => vec![self.escape.clone()],
             "backspace" => vec![self.backspace.clone()],
             "delete" => vec![self.delete.clone()],
+            "command_palette" => vec![self.command_palette.clone()],
             _ => vec![],
         }
     }
 
+    /// Match an action against a raw `KeyCode` (no modifiers).
     pub fn matches_key(&self, action: &str, code: &KeyCode) -> bool {
+        self.matches_key_with_mods(action, code, &KeyModifiers::NONE)
+    }
+
+    /// Match an action against a key code plus modifier flags.
+    /// Parses configured key strings (e.g. `"Ctrl+p"`) and compares both
+    /// the key code and the modifier state.
+    pub fn matches_key_with_mods(
+        &self,
+        action: &str,
+        code: &KeyCode,
+        modifiers: &KeyModifiers,
+    ) -> bool {
         self.action_keys(action).iter().any(|key_str| {
-            if let Some(kc) = str_to_keycode(key_str) {
-                &kc == code
+            if let Some(bound) = parse_keybinding(key_str) {
+                &bound.code == code && &bound.modifiers == modifiers
             } else {
                 false
             }

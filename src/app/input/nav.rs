@@ -1,6 +1,6 @@
 use crate::app::{App, Focus, NetworkEvent};
 use crate::provider::GitProvider;
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::text::Line;
 use std::sync::Arc;
 use std::sync::mpsc;
@@ -190,10 +190,17 @@ impl App {
 
     pub(crate) fn handle_key_with_channel(
         &mut self,
-        code: KeyCode,
+        event: KeyEvent,
         tx: mpsc::Sender<NetworkEvent>,
         github: Arc<dyn GitProvider>,
     ) {
+        let code = event.code;
+
+        // Info overlay – any key closes it.
+        if self.show_info {
+            self.show_info = false;
+            return;
+        }
         // PR review / creation input mode
         if self.pr_pending_action.is_some() {
             if self.keybindings.matches_key("escape", &code) {
@@ -351,9 +358,9 @@ impl App {
             return;
         }
 
-        // Ctrl+P = \x10
-        if let KeyCode::Char(ch) = code
-            && ch == '\x10'
+        if self
+            .keybindings
+            .matches_key_with_mods("command_palette", &code, &event.modifiers)
         {
             self.toggle_command_palette();
             return;

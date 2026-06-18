@@ -1,7 +1,24 @@
 use crate::config::{KeybindingsConfig, ThemeConfig, config_dir, strip_jsonc_comments};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use std::sync::OnceLock;
+use std::sync::{LazyLock, RwLock};
+
+/// Embedded theme data: (name, JSONC content).
+/// Bundled at compile time so themes are available after `cargo install`.
+const EMBEDDED_THEMES: &[(&str, &str)] = &[
+    ("Berlin", include_str!("../../themes/Berlin.jsonc")),
+    ("Bogota", include_str!("../../themes/Bogota.jsonc")),
+    ("Helsinki", include_str!("../../themes/Helsinki.jsonc")),
+    ("Lahabana", include_str!("../../themes/Lahabana.jsonc")),
+    ("London", include_str!("../../themes/London.jsonc")),
+    ("Madrid", include_str!("../../themes/Madrid.jsonc")),
+    ("Miami", include_str!("../../themes/Miami.jsonc")),
+    ("Oslo", include_str!("../../themes/Oslo.jsonc")),
+    ("Paris", include_str!("../../themes/Paris.jsonc")),
+    ("Praha", include_str!("../../themes/Praha.jsonc")),
+    ("Tokio", include_str!("../../themes/Tokio.jsonc")),
+    ("X", include_str!("../../themes/X.jsonc")),
+];
 
 const DEFAULT_PALETTE: [[u8; 3]; 16] = [
     [0x36, 0x35, 0x37],
@@ -22,24 +39,35 @@ const DEFAULT_PALETTE: [[u8; 3]; 16] = [
     [0xf7, 0xf1, 0xff],
 ];
 
-static PALETTE: OnceLock<Vec<[u8; 3]>> = OnceLock::new();
+static PALETTE: LazyLock<RwLock<Vec<[u8; 3]>>> =
+    LazyLock::new(|| RwLock::new(DEFAULT_PALETTE.to_vec()));
 
 pub fn init_theme(config: &ThemeConfig) {
-    let _ = PALETTE.set(config.palette.clone());
+    if let Ok(mut p) = PALETTE.write() {
+        *p = config.palette.clone();
+    }
 }
 
 pub fn load_theme_by_name(name: &str) -> ThemeConfig {
-    let dir = match crate::config::config_dir() {
-        Ok(d) => d.join("themes"),
-        Err(_) => return ThemeConfig::default(),
-    };
-    let path = dir.join(format!("{name}.jsonc"));
-    if path.exists()
-        && let Ok(raw) = std::fs::read_to_string(&path)
-    {
-        let cleaned = strip_jsonc_comments(&raw);
-        if let Ok(cfg) = serde_json::from_str(&cleaned) {
-            return cfg;
+    // Try external themes directory first (allows user overrides).
+    if let Ok(dir) = config_dir() {
+        let path = dir.join("themes").join(format!("{name}.jsonc"));
+        if path.exists()
+            && let Ok(raw) = std::fs::read_to_string(&path)
+        {
+            let cleaned = strip_jsonc_comments(&raw);
+            if let Ok(cfg) = serde_json::from_str(&cleaned) {
+                return cfg;
+            }
+        }
+    }
+    // Fall back to embedded themes.
+    for (embedded_name, content) in EMBEDDED_THEMES {
+        if *embedded_name == name {
+            let cleaned = strip_jsonc_comments(content);
+            if let Ok(cfg) = serde_json::from_str(&cleaned) {
+                return cfg;
+            }
         }
     }
     ThemeConfig::default()
@@ -64,29 +92,29 @@ fn collect_themes_from(dir: &std::path::Path, names: &mut Vec<String>) {
 pub fn list_available_themes() -> Vec<String> {
     let mut names = Vec::new();
 
+    // External themes take precedence (user overrides).
     if let Ok(dir) = config_dir() {
         collect_themes_from(&dir.join("themes"), &mut names);
     }
 
-    if let Ok(exe_dir) = std::env::current_exe()
-        && let Some(parent) = exe_dir.parent()
-    {
-        collect_themes_from(&parent.join("../themes"), &mut names);
-    }
-
-    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
-        collect_themes_from(
-            &std::path::PathBuf::from(manifest_dir).join("themes"),
-            &mut names,
-        );
+    // Always include embedded themes.
+    for (name, _) in EMBEDDED_THEMES {
+        let s = name.to_string();
+        if !names.contains(&s) {
+            names.push(s);
+        }
     }
 
     names.sort();
     names
 }
 
-fn palette() -> &'static Vec<[u8; 3]> {
-    PALETTE.get_or_init(|| DEFAULT_PALETTE.to_vec())
+fn palette() -> Vec<[u8; 3]> {
+    PALETTE
+        .read()
+        .ok()
+        .map(|g| g.clone())
+        .unwrap_or(DEFAULT_PALETTE.to_vec())
 }
 
 #[cfg(test)]
@@ -175,7 +203,7 @@ pub fn nav_hint_lines(kb: &KeybindingsConfig, max_width: usize) -> Vec<Line<'sta
 
 #[cfg(test)]
 mod tests {
-    use super::{contrast_fg_from_rgb, palette_len};
+    use super::*;
     use ratatui::style::Color;
 
     #[test]
@@ -187,5 +215,33 @@ mod tests {
     fn picks_white_on_dark_and_black_on_light() {
         assert_eq!(contrast_fg_from_rgb((0x36, 0x35, 0x37)), Color::White);
         assert_eq!(contrast_fg_from_rgb((0xf7, 0xf1, 0xff)), Color::Black);
+    }
+
+    #[test]
+    fn init_theme_changes_palette() {
+        let default_rgb = palette_rgb(1);
+        // Debug: show embedded Berlin content
+        let embedded = EMBEDDED_THEMES.iter().find(|(n, _)| *n == "Berlin");
+        assert!(embedded.is_some(), "Berlin not in EMBEDDED_THEMES");
+        if let Some((_, content)) = embedded {
+            assert!(content.len() > 0, "Berlin embed content is empty");
+            eprintln!("Berlin embed content: {content}");
+        }
+        // Verify load_theme_by_name returns Berlin
+        let berlin = load_theme_by_name("Berlin");
+        assert_eq!(berlin.palette.len(), 16, "Berlin palette should have 16 entries");
+        assert_eq!(berlin.palette[0], [0, 0, 0], "first entry should be black");
+        // Apply Berlin theme
+        init_theme(&berlin);
+        let berlin_rgb = palette_rgb(1);
+        assert_eq!(
+            berlin_rgb,
+            (153, 153, 153),
+            "expected Berlin gray, got {berlin_rgb:?}"
+        );
+        // Reset to default
+        init_theme(&ThemeConfig::default());
+        let reset_rgb = palette_rgb(1);
+        assert_eq!(reset_rgb, default_rgb, "should restore default");
     }
 }

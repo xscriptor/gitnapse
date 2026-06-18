@@ -149,6 +149,7 @@ pub struct App {
 
     // Command palette
     pub command_palette_visible: bool,
+    pub show_info: bool,
     pub command_input: String,
     pub command_cursor: usize,
     pub command_items: Vec<String>,
@@ -172,7 +173,7 @@ impl App {
 
     fn new(options: RunOptions) -> Result<Self> {
         let token = auth::load_token()?;
-        let github = crate::provider::create_provider(
+        let mut github = crate::provider::create_provider(
             crate::provider::ProviderKind::GitHub,
             token.as_deref(),
         )?;
@@ -181,7 +182,21 @@ impl App {
         theme::init_theme(&theme_config);
         let keybindings = KeybindingsConfig::load_or_default();
         let preview_cache = PreviewCache::new(options.cache_ttl_secs)?;
-        let auth_user = github.fetch_authenticated_user().ok().flatten();
+
+        // Validate any stored token at startup. If the /user endpoint returns 401,
+        // the token is stale – clear it so subsequent requests don't carry a bad header.
+        let auth_user = match github.fetch_authenticated_user() {
+            Ok(user) => user,
+            Err(_) => None,
+        };
+        if auth_user.is_none() && token.is_some() {
+            log::warn!("stored token rejected by GitHub, clearing it");
+            let _ = auth::clear_token();
+            github = crate::provider::create_provider(
+                crate::provider::ProviderKind::GitHub,
+                None,
+            )?;
+        }
 
         if account.preferred_clone_dir.trim().is_empty() {
             account.preferred_clone_dir = std::env::current_dir()
@@ -189,6 +204,17 @@ impl App {
                 .display()
                 .to_string();
         }
+
+        let status = match auth_user.as_ref() {
+            Some(login) => format!("Authenticated as {login}. Press / to search."),
+            None if token.is_some() => {
+                "Stored token is invalid. Press t to set a new one or continue anonymously."
+                    .to_string()
+            }
+            None => {
+                "No token set. Press t to save one or continue anonymously.".to_string()
+            }
+        };
 
         Ok(Self {
             github,
@@ -231,12 +257,7 @@ impl App {
             clone_path_input: account.preferred_clone_dir,
             download_path_input: String::new(),
             tree_search_input: String::new(),
-            status: match auth_user.as_ref() {
-                Some(login) => format!("Authenticated as {login}. Press / to search."),
-                None => {
-                    "No validated token. Press t to save one or continue anonymously.".to_string()
-                }
-            },
+            status,
             focus: Focus::Repos,
             should_quit: false,
             auth_user,
@@ -245,6 +266,7 @@ impl App {
             last_repo_click: None,
             keybindings,
             command_palette_visible: false,
+            show_info: false,
             command_input: String::new(),
             command_cursor: 0,
             command_items: Vec::new(),
@@ -358,7 +380,7 @@ pub fn run_with_options(options: RunOptions) -> Result<()> {
                 Event::Key(key) if key.kind == KeyEventKind::Press => {
                     let tx = net_tx.clone();
                     let g = github.clone();
-                    app.handle_key_with_channel(key.code, tx, g);
+                    app.handle_key_with_channel(key, tx, g);
                 }
                 Event::Mouse(mouse) if mouse.kind == MouseEventKind::Down(MouseButton::Left) => {
                     let area = terminal
@@ -451,6 +473,7 @@ mod tests {
             last_repo_click: None,
             keybindings: crate::config::KeybindingsConfig::default(),
             command_palette_visible: false,
+            show_info: false,
             command_input: String::new(),
             command_cursor: 0,
             command_items: Vec::new(),
@@ -669,6 +692,7 @@ mod tests {
             last_repo_click: None,
             keybindings: crate::config::KeybindingsConfig::default(),
             command_palette_visible: false,
+            show_info: false,
             command_input: String::new(),
             command_cursor: 0,
             command_items: Vec::new(),

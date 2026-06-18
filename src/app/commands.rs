@@ -41,6 +41,7 @@ impl App {
                 self.multi_selected_repos.len()
             ));
         }
+        commands.push("Show Info".to_string());
         commands.push("Change Theme".to_string());
         commands.push("Set Token".to_string());
         commands.push("Quit".to_string());
@@ -188,6 +189,10 @@ impl App {
             }
             "Toggle Tree View" => {
                 self.toggle_tree_view();
+            }
+            "Show Info" => {
+                self.show_info = true;
+                self.status = "GitNapse info. Press Esc to close.".to_string();
             }
             "Change Theme" => {
                 let themes = theme::list_available_themes();

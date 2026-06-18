@@ -6,6 +6,8 @@ use reqwest::header::{ACCEPT, AUTHORIZATION, HeaderMap, HeaderValue, USER_AGENT}
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
 mod ci;
 mod compare;
 mod content;
@@ -223,7 +225,10 @@ impl GitHubClient {
             headers.insert(AUTHORIZATION, value);
         }
 
-        let client = Client::builder().default_headers(headers).build()?;
+        let client = Client::builder()
+            .default_headers(headers)
+            .timeout(REQUEST_TIMEOUT)
+            .build()?;
         Ok(Self {
             client,
             rate_limit_remaining: Mutex::new(None),

@@ -39,14 +39,6 @@ fn terminal_hyperlink(url: &str) -> String {
     format!("\x1b]8;;{url}\x1b\\{url}\x1b]8;;\x1b\\")
 }
 
-fn ensure_rustls_crypto_provider() {
-    if rustls::crypto::CryptoProvider::install_default(rustls::crypto::ring::default_provider())
-        .is_err()
-    {
-        log::warn!("could not install rustls crypto provider (may already be set)");
-    }
-}
-
 fn try_open_browser(url: &str) -> bool {
     if webbrowser::open(url).is_ok() {
         return true;
@@ -79,7 +71,7 @@ pub fn oauth_device_login_cli(
     scopes: Vec<String>,
     timeout_secs: u64,
 ) -> Result<()> {
-    ensure_rustls_crypto_provider();
+    crate::runtime::ensure_crypto_provider();
     let client_id = resolve_client_id(client_id)?;
     let scopes = if scopes.is_empty() {
         vec!["read:user".to_string()]

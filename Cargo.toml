@@ -14,7 +14,7 @@ crossterm = "0.29"
 directories = "6.0"
 dotenvy = "0.15"
 
-keyring = "4.0"
+keyring = "=4.0.1"
 keyring-core = "1.0"
 octocrab = { version = "0.53", default-features = true }
 ratatui = "0.30"

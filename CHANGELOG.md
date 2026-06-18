@@ -40,6 +40,26 @@
 
 - **#![allow(dead_code)] removed from 5 files**: Replaced crate-level allows with specific fields or `Drop` implementations where needed. (`src/error.rs`, `src/models/repo.rs`, `src/models/pr.rs`, `src/models/misc.rs`, `src/models/release.rs`)
 
+- **Theme switching broken (OnceLock)**: Palette used `OnceLock` which can only be written once, making `init_theme` a no-op after the first call. Replaced with `RwLock + LazyLock` so themes can be changed at runtime. (`src/app/theme.rs`)
+
+- **Inline JSONC comments broke theme parsing**: `strip_jsonc_comments` only removed full-line `//` comments but left inline comments (`[0, 0, 0], // color0`), causing `serde_json::from_str` to fail silently. Now strips `//` comments anywhere outside strings. (`src/config/mod.rs`)
+
+- **Stored invalid token not detected**: When a stored token was rejected by GitHub (401), the app kept sending it on every request. `App::new()` now detects a failed `/user` call with a stored token and clears it, recreating the provider for anonymous access. (`src/app/mod.rs`)
+
+- **Search returned 401 without guidance**: The search error handler now shows a clear "Press t to set a GitHub token" message instead of a raw "Search failed: GitHub API responded with 401". (`src/app/network.rs`)
+
+- **CryptoProvider not installed for TUI/CLI**: `ensure_rustls_crypto_provider()` was only called in the OAuth device flow, causing TLS handshake failures when opening the TUI or running CLI commands. Now called from `main()` before any provider is created. (`src/runtime.rs`, `src/main.rs`)
+
+- **reqwest client had no timeout**: Added `REQUEST_TIMEOUT` of 30 seconds to the HTTP client so network hangs don't freeze the UI indefinitely. (`src/github/mod.rs`)
+
+- **Command palette Ctrl+P broken on macOS**: The palette check used `KeyCode::Char('\x10')` which doesn't work on macOS terminals (Ctrl+P is reported as `KeyCode::Char('p') + KeyModifiers::CONTROL`). Now passes the full `KeyEvent` through the handler chain and uses `matches_key_with_mods` from the keybinding system. (`src/app/input/nav.rs`, `src/app/mod.rs`)
+
+- **`command_palette` missing from keybinding config**: Added the field with default `"Ctrl+p"` and a new `matches_key_with_mods` method that parses modifier-prefixed key strings (`Ctrl+`, `Shift+`, `Alt+`). (`src/config/keybindings.rs`)
+
+- **Themes not available after `cargo install`**: Theme files were loaded from disk relative to the executable, which doesn't work with `cargo install`. All 12 themes are now embedded in the binary via `include_str!`. (`src/app/theme.rs`)
+
+- **Info screen shown at startup instead of command palette**: Removed the auto-rendered welcome screen. Added `show_info` toggle and a "Show Info" command palette entry. Press any key to dismiss. (`src/app/render.rs`, `src/app/commands.rs`, `src/app/mod.rs`, `src/app/input/nav.rs`)
+
 ## v0.1.1
 
 ### Fixed

@@ -100,6 +100,7 @@ enum Command {
 fn main() -> Result<()> {
     let _ = dotenvy::dotenv();
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
+    gitnapse::runtime::ensure_crypto_provider();
     let cli = Cli::parse();
     dispatch(cli.command)
 }
