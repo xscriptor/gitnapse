@@ -13,13 +13,18 @@ Thanks for your interest in contributing.
 
 ## Local Validation
 
-The CI runs three mandatory checks. Run **all of them locally** before pushing:
+The CI runs four mandatory checks. Run **all of them locally** before pushing or opening a PR:
 
 ```bash
-cargo fmt --check     # style: must pass without diff
-cargo clippy -- -D warnings  # lints: zero warnings allowed
-cargo test            # tests: all must pass
+./ci-check.sh
 ```
+
+This executes:
+
+- `cargo fmt --all -- --check` — style: must pass without diff
+- `cargo clippy --all-targets --all-features -- -D warnings` — lints: zero warnings allowed
+- `cargo test --all-targets --all-features` — tests: all must pass
+- `cargo audit` — dependency vulnerability scan
 
 To auto-fix formatting issues:
 
