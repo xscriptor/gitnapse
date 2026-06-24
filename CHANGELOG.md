@@ -16,6 +16,8 @@
 
 - **OAuthSession zeroize on drop**: `OAuthSession` now implements `Drop` to zeroize `access_token` and `refresh_token` fields when the session is dropped. (`src/oauth_session.rs`)
 
+- CI - generic linux portable package
+
 ### Changed
 
 - **Unified tokio runtime**: Three separate `OnceLock<Runtime>` instances (GitHubClient, oauth, oauth_session) consolidated into a single shared runtime at `src/runtime.rs`. (`src/runtime.rs`, `src/github/mod.rs`, `src/oauth.rs`, `src/oauth_session.rs`)
