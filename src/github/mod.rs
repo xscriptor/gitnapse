@@ -11,8 +11,8 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 mod ci;
 mod compare;
 mod content;
-mod prs;
 mod provider_impl;
+mod prs;
 mod releases;
 mod repos;
 

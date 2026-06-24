@@ -1,7 +1,6 @@
 use crate::models::{
-    CheckRun, CommitInfo, CompareResponse, Issue, MergeResponse, PullRequest,
-    PullRequestDetail, PullRequestReview, Release, RepoNode, RepoSummary, ReviewComment,
-    WorkflowRun,
+    CheckRun, CommitInfo, CompareResponse, Issue, MergeResponse, PullRequest, PullRequestDetail,
+    PullRequestReview, Release, RepoNode, RepoSummary, ReviewComment, WorkflowRun,
 };
 use anyhow::Result;
 use std::sync::Arc;
@@ -77,11 +76,7 @@ pub trait GitProvider: Send + Sync {
         state: &str,
         per_page: u8,
     ) -> Result<Vec<PullRequest>>;
-    fn fetch_pull_request_detail(
-        &self,
-        full_name: &str,
-        number: u64,
-    ) -> Result<PullRequestDetail>;
+    fn fetch_pull_request_detail(&self, full_name: &str, number: u64) -> Result<PullRequestDetail>;
     fn fetch_pull_request_reviews(
         &self,
         full_name: &str,
@@ -92,11 +87,7 @@ pub trait GitProvider: Send + Sync {
         full_name: &str,
         number: u64,
     ) -> Result<Vec<ReviewComment>>;
-    fn fetch_pull_request_commits(
-        &self,
-        full_name: &str,
-        number: u64,
-    ) -> Result<Vec<CommitInfo>>;
+    fn fetch_pull_request_commits(&self, full_name: &str, number: u64) -> Result<Vec<CommitInfo>>;
     fn merge_pull_request(
         &self,
         full_name: &str,
@@ -111,18 +102,8 @@ pub trait GitProvider: Send + Sync {
         body: &str,
         event: &str,
     ) -> Result<()>;
-    fn update_pull_request(
-        &self,
-        full_name: &str,
-        number: u64,
-        state: &str,
-    ) -> Result<()>;
-    fn create_pull_request_comment(
-        &self,
-        full_name: &str,
-        number: u64,
-        body: &str,
-    ) -> Result<()>;
+    fn update_pull_request(&self, full_name: &str, number: u64, state: &str) -> Result<()>;
+    fn create_pull_request_comment(&self, full_name: &str, number: u64, body: &str) -> Result<()>;
     fn create_pull_request(
         &self,
         full_name: &str,
@@ -138,12 +119,7 @@ pub trait GitProvider: Send + Sync {
         branch: &str,
         per_page: u8,
     ) -> Result<Vec<CommitInfo>>;
-    fn fetch_compare(
-        &self,
-        full_name: &str,
-        base: &str,
-        head: &str,
-    ) -> Result<CompareResponse>;
+    fn fetch_compare(&self, full_name: &str, base: &str, head: &str) -> Result<CompareResponse>;
 
     fn fetch_check_runs(&self, full_name: &str, ref_: &str) -> Result<Vec<CheckRun>>;
     fn fetch_workflow_runs(
@@ -175,10 +151,7 @@ pub trait GitProvider: Send + Sync {
 }
 
 /// Factory: create a provider instance for the given kind and token.
-pub fn create_provider(
-    kind: ProviderKind,
-    token: Option<&str>,
-) -> Result<Arc<dyn GitProvider>> {
+pub fn create_provider(kind: ProviderKind, token: Option<&str>) -> Result<Arc<dyn GitProvider>> {
     match kind {
         ProviderKind::GitHub | ProviderKind::Other => {
             let client = crate::github::GitHubClient::new(token)?;

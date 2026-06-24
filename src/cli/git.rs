@@ -619,10 +619,8 @@ pub fn merge(branch: &str) -> Result<()> {
 
 pub fn download_file(repo: &str, path: &str, r#ref: Option<&str>, out: &PathBuf) -> Result<()> {
     let token = auth::load_token()?;
-    let client = crate::provider::create_provider(
-        crate::provider::ProviderKind::GitHub,
-        token.as_deref(),
-    )?;
+    let client =
+        crate::provider::create_provider(crate::provider::ProviderKind::GitHub, token.as_deref())?;
 
     let bytes = match r#ref {
         Some(branch) if !branch.trim().is_empty() => {

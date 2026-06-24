@@ -106,7 +106,11 @@ fn main() -> Result<()> {
 }
 
 fn dispatch(cmd: Option<Command>) -> Result<()> {
-    use Command::{Run, DownloadFile, Clone, Commit, Push, Pull, Fetch, Checkout, Diff, Stash, Tag, Status, Log, Branch, Reset, Pr, Issue, Ci, Compare, Remote, Config, Merge, Release, Repo, Search, Auth};
+    use Command::{
+        Auth, Branch, Checkout, Ci, Clone, Commit, Compare, Config, Diff, DownloadFile, Fetch,
+        Issue, Log, Merge, Pr, Pull, Push, Release, Remote, Repo, Reset, Run, Search, Stash,
+        Status, Tag,
+    };
     match cmd {
         Some(Run(args)) => app::run_with_options(args.into()),
         Some(DownloadFile(args)) => {
@@ -141,7 +145,7 @@ fn dispatch(cmd: Option<Command>) -> Result<()> {
 }
 
 fn dispatch_stash(action: cli::StashAction) -> Result<()> {
-    use cli::StashAction::{Push, Pop, List};
+    use cli::StashAction::{List, Pop, Push};
     match action {
         Push { message } => cli::stash_push(message.as_deref()),
         Pop => cli::stash_pop(),
@@ -150,16 +154,20 @@ fn dispatch_stash(action: cli::StashAction) -> Result<()> {
 }
 
 fn dispatch_tag(action: cli::TagAction) -> Result<()> {
-    use cli::TagAction::{List, Create, Delete};
+    use cli::TagAction::{Create, Delete, List};
     match action {
         List { pattern } => cli::tag_list(pattern.as_deref()),
-        Create { name, message, target } => cli::tag_create(&name, message.as_deref(), target.as_deref()),
+        Create {
+            name,
+            message,
+            target,
+        } => cli::tag_create(&name, message.as_deref(), target.as_deref()),
         Delete { name } => cli::tag_delete(&name),
     }
 }
 
 fn dispatch_pr(action: cli::PrAction) -> Result<()> {
-    use cli::PrAction::{List, Create, Merge};
+    use cli::PrAction::{Create, List, Merge};
     match action {
         List(a) => cli::pr_list(&a.repo, &a.state),
         Create(a) => cli::pr_create(&a.repo, &a.title, &a.head, &a.base, a.body.as_deref()),
@@ -168,7 +176,7 @@ fn dispatch_pr(action: cli::PrAction) -> Result<()> {
 }
 
 fn dispatch_issue(action: cli::IssueAction) -> Result<()> {
-    use cli::IssueAction::{List, Create, Close};
+    use cli::IssueAction::{Close, Create, List};
     match action {
         List(a) => cli::issue_list(&a.repo, &a.state),
         Create(a) => cli::issue_create(&a.repo, &a.title, a.body.as_deref()),
@@ -177,7 +185,7 @@ fn dispatch_issue(action: cli::IssueAction) -> Result<()> {
 }
 
 fn dispatch_remote(action: cli::RemoteAction) -> Result<()> {
-    use cli::RemoteAction::{List, Add, Remove, Rename};
+    use cli::RemoteAction::{Add, List, Remove, Rename};
     match action {
         List => cli::remote_list(),
         Add(a) => cli::remote_add(&a.name, &a.url),
@@ -187,7 +195,7 @@ fn dispatch_remote(action: cli::RemoteAction) -> Result<()> {
 }
 
 fn dispatch_config(action: cli::ConfigAction) -> Result<()> {
-    use cli::ConfigAction::{Get, Set, List};
+    use cli::ConfigAction::{Get, List, Set};
     match action {
         Get(a) => cli::config_get(&a.key),
         Set(a) => cli::config_set(&a.key, &a.value),
@@ -196,10 +204,16 @@ fn dispatch_config(action: cli::ConfigAction) -> Result<()> {
 }
 
 fn dispatch_release(action: cli::ReleaseAction) -> Result<()> {
-    use cli::ReleaseAction::{List, Create};
+    use cli::ReleaseAction::{Create, List};
     match action {
         List(a) => cli::release_list(&a.repo),
-        Create(a) => cli::release_create(&a.repo, &a.tag_name, a.name.as_deref(), a.body.as_deref(), a.prerelease),
+        Create(a) => cli::release_create(
+            &a.repo,
+            &a.tag_name,
+            a.name.as_deref(),
+            a.body.as_deref(),
+            a.prerelease,
+        ),
     }
 }
 
@@ -211,7 +225,7 @@ fn dispatch_repo(action: cli::RepoAction) -> Result<()> {
 }
 
 fn dispatch_auth(action: cli::AuthAction) -> Result<()> {
-    use cli::AuthAction::{Set, Clear, Status, Oauth};
+    use cli::AuthAction::{Clear, Oauth, Set, Status};
     match action {
         Set { token } => auth::set_token_cli(token),
         Clear => auth::clear_token_cli(),
@@ -223,7 +237,11 @@ fn dispatch_auth(action: cli::AuthAction) -> Result<()> {
 fn dispatch_oauth(action: cli::OauthAction) -> Result<()> {
     use cli::OauthAction::{Login, Status};
     match action {
-        Login { client_id, scope, timeout_secs } => oauth::oauth_device_login_cli(client_id, scope, timeout_secs),
+        Login {
+            client_id,
+            scope,
+            timeout_secs,
+        } => oauth::oauth_device_login_cli(client_id, scope, timeout_secs),
         Status => oauth::oauth_status_cli(),
     }
 }

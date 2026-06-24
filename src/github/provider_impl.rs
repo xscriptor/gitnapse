@@ -29,7 +29,11 @@ impl GitProvider for GitHubClient {
         self.fetch_repo_tree(full_name, branch).map_err(Into::into)
     }
 
-    fn fetch_starred_repos(&self, page: u32, per_page: u8) -> Result<Vec<crate::models::RepoSummary>> {
+    fn fetch_starred_repos(
+        &self,
+        page: u32,
+        per_page: u8,
+    ) -> Result<Vec<crate::models::RepoSummary>> {
         self.fetch_starred_repos(page, per_page).map_err(Into::into)
     }
 
@@ -142,22 +146,12 @@ impl GitProvider for GitHubClient {
         Ok(())
     }
 
-    fn update_pull_request(
-        &self,
-        full_name: &str,
-        number: u64,
-        state: &str,
-    ) -> Result<()> {
+    fn update_pull_request(&self, full_name: &str, number: u64, state: &str) -> Result<()> {
         let _ = self.update_pull_request(full_name, number, state)?;
         Ok(())
     }
 
-    fn create_pull_request_comment(
-        &self,
-        full_name: &str,
-        number: u64,
-        body: &str,
-    ) -> Result<()> {
+    fn create_pull_request_comment(&self, full_name: &str, number: u64, body: &str) -> Result<()> {
         let _ = self.create_pull_request_comment(full_name, number, body)?;
         Ok(())
     }
@@ -190,7 +184,8 @@ impl GitProvider for GitHubClient {
         base: &str,
         head: &str,
     ) -> Result<crate::models::CompareResponse> {
-        self.fetch_compare(full_name, base, head).map_err(Into::into)
+        self.fetch_compare(full_name, base, head)
+            .map_err(Into::into)
     }
 
     fn fetch_check_runs(
@@ -211,11 +206,7 @@ impl GitProvider for GitHubClient {
             .map_err(Into::into)
     }
 
-    fn fetch_releases(
-        &self,
-        full_name: &str,
-        per_page: u8,
-    ) -> Result<Vec<crate::models::Release>> {
+    fn fetch_releases(&self, full_name: &str, per_page: u8) -> Result<Vec<crate::models::Release>> {
         self.fetch_releases(full_name, per_page).map_err(Into::into)
     }
 

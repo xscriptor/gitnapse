@@ -14,10 +14,8 @@ pub fn get_runtime() -> &'static Runtime {
 /// Install the rustls crypto provider (required before any TLS connection).
 /// Safe to call multiple times – subsequent calls are no-ops.
 pub fn ensure_crypto_provider() {
-    if rustls::crypto::CryptoProvider::install_default(
-        rustls::crypto::ring::default_provider(),
-    )
-    .is_err()
+    if rustls::crypto::CryptoProvider::install_default(rustls::crypto::ring::default_provider())
+        .is_err()
     {
         log::warn!("could not install rustls crypto provider (may already be set)");
     }
