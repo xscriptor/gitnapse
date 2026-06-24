@@ -229,7 +229,11 @@ mod tests {
         }
         // Verify load_theme_by_name returns Berlin
         let berlin = load_theme_by_name("Berlin");
-        assert_eq!(berlin.palette.len(), 16, "Berlin palette should have 16 entries");
+        assert_eq!(
+            berlin.palette.len(),
+            16,
+            "Berlin palette should have 16 entries"
+        );
         assert_eq!(berlin.palette[0], [0, 0, 0], "first entry should be black");
         // Apply Berlin theme
         init_theme(&berlin);

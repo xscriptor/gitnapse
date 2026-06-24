@@ -168,10 +168,8 @@ pub fn oauth_status_cli() -> Result<()> {
         return Ok(());
     }
 
-    let client = crate::provider::create_provider(
-        crate::provider::ProviderKind::GitHub,
-        token.as_deref(),
-    )?;
+    let client =
+        crate::provider::create_provider(crate::provider::ProviderKind::GitHub, token.as_deref())?;
     let user = client.fetch_authenticated_user()?;
     let authenticated = user.is_some();
 

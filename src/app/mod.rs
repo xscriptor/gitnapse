@@ -192,10 +192,7 @@ impl App {
         if auth_user.is_none() && token.is_some() {
             log::warn!("stored token rejected by GitHub, clearing it");
             let _ = auth::clear_token();
-            github = crate::provider::create_provider(
-                crate::provider::ProviderKind::GitHub,
-                None,
-            )?;
+            github = crate::provider::create_provider(crate::provider::ProviderKind::GitHub, None)?;
         }
 
         if account.preferred_clone_dir.trim().is_empty() {
@@ -211,9 +208,7 @@ impl App {
                 "Stored token is invalid. Press t to set a new one or continue anonymously."
                     .to_string()
             }
-            None => {
-                "No token set. Press t to save one or continue anonymously.".to_string()
-            }
+            None => "No token set. Press t to save one or continue anonymously.".to_string(),
         };
 
         Ok(Self {
@@ -430,11 +425,8 @@ mod tests {
 
     fn test_app() -> App {
         App {
-            github: crate::provider::create_provider(
-                crate::provider::ProviderKind::GitHub,
-                None,
-            )
-            .expect("client"),
+            github: crate::provider::create_provider(crate::provider::ProviderKind::GitHub, None)
+                .expect("client"),
             account: crate::config::AccountConfig {
                 preferred_clone_dir: ".".to_string(),
                 last_branch_by_repo: Default::default(),
@@ -642,11 +634,8 @@ mod tests {
     #[test]
     fn lazy_tree_progress_advances_limit() {
         let mut app = App {
-            github: crate::provider::create_provider(
-                crate::provider::ProviderKind::GitHub,
-                None,
-            )
-            .expect("client"),
+            github: crate::provider::create_provider(crate::provider::ProviderKind::GitHub, None)
+                .expect("client"),
             account: crate::config::AccountConfig {
                 preferred_clone_dir: ".".to_string(),
                 last_branch_by_repo: Default::default(),

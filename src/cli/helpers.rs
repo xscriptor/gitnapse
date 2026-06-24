@@ -114,12 +114,12 @@ pub fn handle_api_error(full_name: &str, e: &anyhow::Error) -> String {
         .downcast_ref::<GitHubError>()
         .map(|gh_err| match gh_err {
             GitHubError::Api { status, body } if *status == 404 || body.contains("Not Found") => {
-            format!("repository '{full_name}' not found on GitHub")
-        }
-        GitHubError::Unauthorized => {
-            "authentication required — run 'gitnapse auth set' or 'gitnapse auth oauth login'"
-                .to_string()
-        }
+                format!("repository '{full_name}' not found on GitHub")
+            }
+            GitHubError::Unauthorized => {
+                "authentication required — run 'gitnapse auth set' or 'gitnapse auth oauth login'"
+                    .to_string()
+            }
             GitHubError::RateLimited {
                 remaining: _,
                 reset,

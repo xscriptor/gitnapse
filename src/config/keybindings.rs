@@ -16,16 +16,31 @@ fn parse_keybinding(s: &str) -> Option<BoundKey> {
     let s = s.trim();
     if let Some(rest) = s.strip_prefix("Ctrl+").or_else(|| s.strip_prefix("ctrl+")) {
         let code = str_to_keycode(rest)?;
-        Some(BoundKey { code, modifiers: KeyModifiers::CONTROL })
-    } else if let Some(rest) = s.strip_prefix("Shift+").or_else(|| s.strip_prefix("shift+")) {
+        Some(BoundKey {
+            code,
+            modifiers: KeyModifiers::CONTROL,
+        })
+    } else if let Some(rest) = s
+        .strip_prefix("Shift+")
+        .or_else(|| s.strip_prefix("shift+"))
+    {
         let code = str_to_keycode(rest)?;
-        Some(BoundKey { code, modifiers: KeyModifiers::SHIFT })
+        Some(BoundKey {
+            code,
+            modifiers: KeyModifiers::SHIFT,
+        })
     } else if let Some(rest) = s.strip_prefix("Alt+").or_else(|| s.strip_prefix("alt+")) {
         let code = str_to_keycode(rest)?;
-        Some(BoundKey { code, modifiers: KeyModifiers::ALT })
+        Some(BoundKey {
+            code,
+            modifiers: KeyModifiers::ALT,
+        })
     } else {
         let code = str_to_keycode(s)?;
-        Some(BoundKey { code, modifiers: KeyModifiers::NONE })
+        Some(BoundKey {
+            code,
+            modifiers: KeyModifiers::NONE,
+        })
     }
 }
 
