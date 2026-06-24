@@ -110,8 +110,7 @@ pub fn resolve_full_name(repo: &str) -> Result<String> {
 // ── API helpers ─────────────────────────────────────────────────────────
 
 pub fn handle_api_error(full_name: &str, e: &anyhow::Error) -> String {
-    let msg = e
-        .downcast_ref::<GitHubError>()
+    e.downcast_ref::<GitHubError>()
         .map(|gh_err| match gh_err {
             GitHubError::Api { status, body } if *status == 404 || body.contains("Not Found") => {
                 format!("repository '{full_name}' not found on GitHub")
@@ -128,8 +127,7 @@ pub fn handle_api_error(full_name: &str, e: &anyhow::Error) -> String {
             }
             _ => format!("{gh_err}"),
         })
-        .unwrap_or_else(|| format!("{e}"));
-    msg
+        .unwrap_or_else(|| format!("{e}"))
 }
 
 pub fn make_client() -> Result<Arc<dyn GitProvider>> {

@@ -185,10 +185,7 @@ impl App {
 
         // Validate any stored token at startup. If the /user endpoint returns 401,
         // the token is stale – clear it so subsequent requests don't carry a bad header.
-        let auth_user = match github.fetch_authenticated_user() {
-            Ok(user) => user,
-            Err(_) => None,
-        };
+        let auth_user: Option<String> = github.fetch_authenticated_user().unwrap_or_default();
         if auth_user.is_none() && token.is_some() {
             log::warn!("stored token rejected by GitHub, clearing it");
             let _ = auth::clear_token();
