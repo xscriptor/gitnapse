@@ -224,7 +224,7 @@ mod tests {
         let embedded = EMBEDDED_THEMES.iter().find(|(n, _)| *n == "Berlin");
         assert!(embedded.is_some(), "Berlin not in EMBEDDED_THEMES");
         if let Some((_, content)) = embedded {
-            assert!(content.len() > 0, "Berlin embed content is empty");
+            assert!(!content.is_empty(), "Berlin embed content is empty");
             eprintln!("Berlin embed content: {content}");
         }
         // Verify load_theme_by_name returns Berlin
