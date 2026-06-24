@@ -8,11 +8,12 @@ mod theme;
 use crate::auth;
 use crate::cache::PreviewCache;
 use crate::config::{AccountConfig, KeybindingsConfig, ThemeConfig};
-use crate::github::GitHubClient;
 use crate::models::{
     CheckRun, CommitInfo, CompareResponse, Issue, MergeResponse, PullRequest, PullRequestDetail,
     PullRequestReview, RepoNode, RepoSummary, ReviewComment,
 };
+use crate::provider::GitProvider;
+use crate::task_manager::TaskManager;
 use anyhow::{Context, Result, anyhow};
 use crossterm::event::{
     self, DisableMouseCapture, EnableMouseCapture, Event, KeyEventKind, MouseButton, MouseEventKind,
@@ -96,9 +97,10 @@ pub enum Focus {
 
 pub struct App {
     // Services
-    pub github: Arc<GitHubClient>,
+    pub github: Arc<dyn GitProvider>,
     pub account: AccountConfig,
     pub preview_cache: PreviewCache,
+    pub task_manager: TaskManager,
 
     // Search state
     pub search_query: String,
@@ -147,6 +149,7 @@ pub struct App {
 
     // Command palette
     pub command_palette_visible: bool,
+    pub show_info: bool,
     pub command_input: String,
     pub command_cursor: usize,
     pub command_items: Vec<String>,
@@ -170,13 +173,30 @@ impl App {
 
     fn new(options: RunOptions) -> Result<Self> {
         let token = auth::load_token()?;
-        let github = Arc::new(GitHubClient::new(token.as_deref())?);
+        let mut github = crate::provider::create_provider(
+            crate::provider::ProviderKind::GitHub,
+            token.as_deref(),
+        )?;
         let mut account = AccountConfig::load_or_default()?;
         let theme_config = ThemeConfig::load_or_default();
         theme::init_theme(&theme_config);
         let keybindings = KeybindingsConfig::load_or_default();
         let preview_cache = PreviewCache::new(options.cache_ttl_secs)?;
-        let auth_user = github.fetch_authenticated_user().ok().flatten();
+
+        // Validate any stored token at startup. If the /user endpoint returns 401,
+        // the token is stale – clear it so subsequent requests don't carry a bad header.
+        let auth_user = match github.fetch_authenticated_user() {
+            Ok(user) => user,
+            Err(_) => None,
+        };
+        if auth_user.is_none() && token.is_some() {
+            log::warn!("stored token rejected by GitHub, clearing it");
+            let _ = auth::clear_token();
+            github = crate::provider::create_provider(
+                crate::provider::ProviderKind::GitHub,
+                None,
+            )?;
+        }
 
         if account.preferred_clone_dir.trim().is_empty() {
             account.preferred_clone_dir = std::env::current_dir()
@@ -185,10 +205,22 @@ impl App {
                 .to_string();
         }
 
+        let status = match auth_user.as_ref() {
+            Some(login) => format!("Authenticated as {login}. Press / to search."),
+            None if token.is_some() => {
+                "Stored token is invalid. Press t to set a new one or continue anonymously."
+                    .to_string()
+            }
+            None => {
+                "No token set. Press t to save one or continue anonymously.".to_string()
+            }
+        };
+
         Ok(Self {
             github,
             account: account.clone(),
             preview_cache,
+            task_manager: TaskManager::new(),
             search_query: options.initial_query,
             search_page: options.initial_page.max(1),
             per_page: options.per_page.clamp(1, 100),
@@ -225,12 +257,7 @@ impl App {
             clone_path_input: account.preferred_clone_dir,
             download_path_input: String::new(),
             tree_search_input: String::new(),
-            status: match auth_user.as_ref() {
-                Some(login) => format!("Authenticated as {login}. Press / to search."),
-                None => {
-                    "No validated token. Press t to save one or continue anonymously.".to_string()
-                }
-            },
+            status,
             focus: Focus::Repos,
             should_quit: false,
             auth_user,
@@ -239,6 +266,7 @@ impl App {
             last_repo_click: None,
             keybindings,
             command_palette_visible: false,
+            show_info: false,
             command_input: String::new(),
             command_cursor: 0,
             command_items: Vec::new(),
@@ -328,7 +356,7 @@ pub fn run_with_options(options: RunOptions) -> Result<()> {
     let query = app.search_query.clone();
     let page = app.search_page;
     let per_page = app.per_page;
-    std::thread::spawn(move || {
+    app.task_manager.spawn(move || {
         let result = g.search_repositories_page(&query, page, per_page);
         let _ = tx.send(NetworkEvent::SearchResult(
             result.map_err(|e| e.to_string()),
@@ -352,7 +380,7 @@ pub fn run_with_options(options: RunOptions) -> Result<()> {
                 Event::Key(key) if key.kind == KeyEventKind::Press => {
                     let tx = net_tx.clone();
                     let g = github.clone();
-                    app.handle_key_with_channel(key.code, tx, g);
+                    app.handle_key_with_channel(key, tx, g);
                 }
                 Event::Mouse(mouse) if mouse.kind == MouseEventKind::Down(MouseButton::Left) => {
                     let area = terminal
@@ -383,6 +411,7 @@ pub fn run_with_options(options: RunOptions) -> Result<()> {
     disable_raw_mode().ok();
     execute!(stdout(), LeaveAlternateScreen, DisableMouseCapture).ok();
     terminal.show_cursor().ok();
+    app.task_manager.join_all();
     let _ = panic::take_hook(); // remove our hook
     terminal_result
 }
@@ -401,12 +430,17 @@ mod tests {
 
     fn test_app() -> App {
         App {
-            github: Arc::new(crate::github::GitHubClient::new(None).expect("client")),
+            github: crate::provider::create_provider(
+                crate::provider::ProviderKind::GitHub,
+                None,
+            )
+            .expect("client"),
             account: crate::config::AccountConfig {
                 preferred_clone_dir: ".".to_string(),
                 last_branch_by_repo: Default::default(),
             },
             preview_cache: crate::cache::PreviewCache::new(120).expect("cache"),
+            task_manager: TaskManager::new(),
             search_query: String::new(),
             search_page: 1,
             per_page: 30,
@@ -439,6 +473,7 @@ mod tests {
             last_repo_click: None,
             keybindings: crate::config::KeybindingsConfig::default(),
             command_palette_visible: false,
+            show_info: false,
             command_input: String::new(),
             command_cursor: 0,
             command_items: Vec::new(),
@@ -607,12 +642,17 @@ mod tests {
     #[test]
     fn lazy_tree_progress_advances_limit() {
         let mut app = App {
-            github: Arc::new(crate::github::GitHubClient::new(None).expect("client")),
+            github: crate::provider::create_provider(
+                crate::provider::ProviderKind::GitHub,
+                None,
+            )
+            .expect("client"),
             account: crate::config::AccountConfig {
                 preferred_clone_dir: ".".to_string(),
                 last_branch_by_repo: Default::default(),
             },
             preview_cache: crate::cache::PreviewCache::new(120).expect("cache"),
+            task_manager: TaskManager::new(),
             search_query: String::new(),
             search_page: 1,
             per_page: 30,
@@ -652,6 +692,7 @@ mod tests {
             last_repo_click: None,
             keybindings: crate::config::KeybindingsConfig::default(),
             command_palette_visible: false,
+            show_info: false,
             command_input: String::new(),
             command_cursor: 0,
             command_items: Vec::new(),

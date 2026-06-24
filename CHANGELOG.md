@@ -1,5 +1,67 @@
 # Changelog
 
+## v0.1.2
+
+### Added
+
+- **GitProvider trait**: New `GitProvider` trait in `src/provider.rs` abstracts all GitHub API methods (~28 methods), enabling future support for Azure DevOps, GitLab, and other providers. (`src/provider.rs`, `src/github/provider_impl.rs`)
+
+- **Provider auto-detection**: `detect_provider(url)` function parses git remote URLs to identify GitHub, Azure DevOps, GitLab, Bitbucket, and other providers. (`src/provider.rs`)
+
+- **Provider factory**: `create_provider(kind, token)` returns `Arc<dyn GitProvider>`, making provider selection a single call site. (`src/provider.rs`)
+
+- **TaskManager**: New `TaskManager` in `src/task_manager.rs` tracks all background `JoinHandle`s instead of discarding them. Threads are named `"gitnapse-worker"` for debugging. (`src/task_manager.rs`)
+
+- **Graceful shutdown**: `task_manager.join_all()` is called before the TUI exits, ensuring all background threads complete cleanly. (`src/app/mod.rs`)
+
+- **OAuthSession zeroize on drop**: `OAuthSession` now implements `Drop` to zeroize `access_token` and `refresh_token` fields when the session is dropped. (`src/oauth_session.rs`)
+
+- CI - generic linux portable package
+
+### Changed
+
+- **Unified tokio runtime**: Three separate `OnceLock<Runtime>` instances (GitHubClient, oauth, oauth_session) consolidated into a single shared runtime at `src/runtime.rs`. (`src/runtime.rs`, `src/github/mod.rs`, `src/oauth.rs`, `src/oauth_session.rs`)
+
+- **Threads migrated to TaskManager**: All 19 `std::thread::spawn` calls replaced with `self.task_manager.spawn()`, providing thread tracking, naming, and cleanup. (`src/app/commands.rs`, `src/app/input/nav.rs`)
+
+- **Token input no longer exposes secret on every keypress**: `handle_token_input` now accumulates characters in a plain `String` (reusing `input_buffer`) and only creates a `SecretString` when saving on Enter, eliminating heap copies of the secret on each keystroke. (`src/app/input/fields.rs`)
+
+- **Main.rs dispatch refactored**: The ~40-arm match in `main()` extracted into 9 named `dispatch_*` functions (dispatch_stash, dispatch_tag, dispatch_pr, dispatch_issue, dispatch_remote, dispatch_config, dispatch_release, dispatch_repo, dispatch_auth, dispatch_oauth). (`src/main.rs`)
+
+- **Cache write errors logged**: `fs::write` failures in cache are now logged via `log::warn!` instead of being silently discarded. (`src/cache.rs`)
+
+- **Test env var safety**: Replaced `unsafe { std::env::set_var }` in integration tests and `auth_precedence_tests` with `temp_env::with_var`. (`src/github/mod.rs`, `tests/auth_precedence_tests.rs`)
+
+- **handle_api_error accepts anyhow::Error**: The CLI error handler now takes `&anyhow::Error` and downcasts to `GitHubError` internally, making it compatible with the new `GitProvider` trait. (`src/cli/helpers.rs`)
+
+- **Duplicate tree_text_mode logic removed**: Extracted to a single `toggle_tree_view()` method in `App`, called from both `commands.rs` and `nav.rs`. (`src/app/actions.rs`)
+
+- **Unused imports cleaned up**: Removed stale `Arc`, `Context`, `GitHubClient`, `Line`, and `GitProvider` imports across actions.rs, commands.rs, git.rs, and oauth.rs.
+
+### Fixed
+
+- **#![allow(dead_code)] removed from 5 files**: Replaced crate-level allows with specific fields or `Drop` implementations where needed. (`src/error.rs`, `src/models/repo.rs`, `src/models/pr.rs`, `src/models/misc.rs`, `src/models/release.rs`)
+
+- **Theme switching broken (OnceLock)**: Palette used `OnceLock` which can only be written once, making `init_theme` a no-op after the first call. Replaced with `RwLock + LazyLock` so themes can be changed at runtime. (`src/app/theme.rs`)
+
+- **Inline JSONC comments broke theme parsing**: `strip_jsonc_comments` only removed full-line `//` comments but left inline comments (`[0, 0, 0], // color0`), causing `serde_json::from_str` to fail silently. Now strips `//` comments anywhere outside strings. (`src/config/mod.rs`)
+
+- **Stored invalid token not detected**: When a stored token was rejected by GitHub (401), the app kept sending it on every request. `App::new()` now detects a failed `/user` call with a stored token and clears it, recreating the provider for anonymous access. (`src/app/mod.rs`)
+
+- **Search returned 401 without guidance**: The search error handler now shows a clear "Press t to set a GitHub token" message instead of a raw "Search failed: GitHub API responded with 401". (`src/app/network.rs`)
+
+- **CryptoProvider not installed for TUI/CLI**: `ensure_rustls_crypto_provider()` was only called in the OAuth device flow, causing TLS handshake failures when opening the TUI or running CLI commands. Now called from `main()` before any provider is created. (`src/runtime.rs`, `src/main.rs`)
+
+- **reqwest client had no timeout**: Added `REQUEST_TIMEOUT` of 30 seconds to the HTTP client so network hangs don't freeze the UI indefinitely. (`src/github/mod.rs`)
+
+- **Command palette Ctrl+P broken on macOS**: The palette check used `KeyCode::Char('\x10')` which doesn't work on macOS terminals (Ctrl+P is reported as `KeyCode::Char('p') + KeyModifiers::CONTROL`). Now passes the full `KeyEvent` through the handler chain and uses `matches_key_with_mods` from the keybinding system. (`src/app/input/nav.rs`, `src/app/mod.rs`)
+
+- **`command_palette` missing from keybinding config**: Added the field with default `"Ctrl+p"` and a new `matches_key_with_mods` method that parses modifier-prefixed key strings (`Ctrl+`, `Shift+`, `Alt+`). (`src/config/keybindings.rs`)
+
+- **Themes not available after `cargo install`**: Theme files were loaded from disk relative to the executable, which doesn't work with `cargo install`. All 12 themes are now embedded in the binary via `include_str!`. (`src/app/theme.rs`)
+
+- **Info screen shown at startup instead of command palette**: Removed the auto-rendered welcome screen. Added `show_info` toggle and a "Show Info" command palette entry. Press any key to dismiss. (`src/app/render.rs`, `src/app/commands.rs`, `src/app/mod.rs`, `src/app/input/nav.rs`)
+
 ## v0.1.1
 
 ### Fixed

@@ -5,7 +5,6 @@ use std::process::Command;
 
 use crate::auth;
 use crate::error::GitHubError;
-use crate::github::GitHubClient;
 
 use super::helpers;
 
@@ -50,18 +49,25 @@ pub fn clone_repo(repo_spec: &str, dir: Option<&str>) -> Result<()> {
         repo.clone()
     } else {
         let token = auth::load_token()?;
-        let client = GitHubClient::new(token.as_deref())?;
+        let client = crate::provider::create_provider(
+            crate::provider::ProviderKind::GitHub,
+            token.as_deref(),
+        )?;
         let info = client.fetch_repo_by_name(&repo).map_err(|e| {
-            let msg = match &e {
-                GitHubError::Api { status, body }
-                    if *status == 404 || body.contains("Not Found") =>
-                {
-                    format!("repository '{repo}' not found on GitHub")
+            let msg = if let Some(gh_err) = e.downcast_ref::<GitHubError>() {
+                match gh_err {
+                    GitHubError::Api { status, body }
+                        if *status == 404 || body.contains("Not Found") =>
+                    {
+                        format!("repository '{repo}' not found on GitHub")
+                    }
+                    GitHubError::Unauthorized => {
+                        "authentication required — run 'gitnapse auth set' or 'gitnapse auth oauth login'".to_string()
+                    }
+                    _ => format!("{gh_err}"),
                 }
-                GitHubError::Unauthorized => {
-                    "authentication required — run 'gitnapse auth set' or 'gitnapse auth oauth login'".to_string()
-                }
-                _ => format!("{e}"),
+            } else {
+                format!("{e}")
             };
             anyhow!("{msg}")
         })?;
@@ -613,7 +619,10 @@ pub fn merge(branch: &str) -> Result<()> {
 
 pub fn download_file(repo: &str, path: &str, r#ref: Option<&str>, out: &PathBuf) -> Result<()> {
     let token = auth::load_token()?;
-    let client = GitHubClient::new(token.as_deref())?;
+    let client = crate::provider::create_provider(
+        crate::provider::ProviderKind::GitHub,
+        token.as_deref(),
+    )?;
 
     let bytes = match r#ref {
         Some(branch) if !branch.trim().is_empty() => {

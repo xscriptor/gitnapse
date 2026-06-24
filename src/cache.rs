@@ -84,7 +84,9 @@ impl PreviewCache {
     ) {
         let key = cache_key(repo, branch, path);
         let file = self.dir.join(format!("{key}.cache"));
-        let _ = fs::write(&file, content);
+        if let Err(e) = fs::write(&file, content) {
+            log::warn!("Failed to write cache file {}: {e}", file.display());
+        }
         self.memory
             .insert(key.clone(), (Instant::now(), content.to_vec()));
         if let Some(etag_value) = etag {

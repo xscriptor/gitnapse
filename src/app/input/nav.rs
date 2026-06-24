@@ -1,6 +1,6 @@
 use crate::app::{App, Focus, NetworkEvent};
-use crate::github::GitHubClient;
-use crossterm::event::KeyCode;
+use crate::provider::GitProvider;
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::text::Line;
 use std::sync::Arc;
 use std::sync::mpsc;
@@ -108,40 +108,7 @@ impl App {
                 self.status = "Preview a file first before downloading.".to_string();
             }
         } else if self.keybindings.matches_key("tree_view", &code) {
-            if self.current_repo.is_some() {
-                self.tree_text_mode = !self.tree_text_mode;
-                self.preview_scroll = 0;
-                if self.tree_text_mode {
-                    let branch = self.selected_branch_name();
-                    self.preview_title = format!(
-                        "tree {} [{}]",
-                        self.current_repo
-                            .as_ref()
-                            .map(|r| r.full_name.clone())
-                            .unwrap_or_default(),
-                        branch
-                    );
-                    self.preview_lines = self
-                        .tree_all
-                        .iter()
-                        .map(|node| {
-                            let indent = "  ".repeat(node.depth.min(20));
-                            let icon = if node.is_dir { "[D]" } else { "[F]" };
-                            Line::from(format!("{indent}{icon} {}", node.path))
-                        })
-                        .collect();
-                    self.current_preview_path = None;
-                    self.focus = Focus::Preview;
-                    self.status = "Tree view enabled in preview pane.".to_string();
-                } else {
-                    self.preview_title = "Preview".to_string();
-                    self.preview_lines = vec![Line::from(
-                        "Tree preview disabled. Select a file and press Enter to preview.",
-                    )];
-                    self.focus = Focus::Tree;
-                    self.status = "Tree view disabled.".to_string();
-                }
-            }
+            self.toggle_tree_view();
         } else if self.keybindings.matches_key("focus_next", &code) {
             self.focus = match self.focus {
                 Focus::Repos if !self.tree_all.is_empty() => Focus::Tree,
@@ -223,10 +190,17 @@ impl App {
 
     pub(crate) fn handle_key_with_channel(
         &mut self,
-        code: KeyCode,
+        event: KeyEvent,
         tx: mpsc::Sender<NetworkEvent>,
-        github: Arc<GitHubClient>,
+        github: Arc<dyn GitProvider>,
     ) {
+        let code = event.code;
+
+        // Info overlay – any key closes it.
+        if self.show_info {
+            self.show_info = false;
+            return;
+        }
         // PR review / creation input mode
         if self.pr_pending_action.is_some() {
             if self.keybindings.matches_key("escape", &code) {
@@ -256,7 +230,8 @@ impl App {
                 match action.as_str() {
                     "approve" => {
                         self.status = "Approving PR...".to_string();
-                        std::thread::spawn(move || {
+                        let tx = tx.clone();
+                        self.task_manager.spawn(move || {
                             let body = if text.is_empty() {
                                 "LGTM, approved."
                             } else {
@@ -279,7 +254,8 @@ impl App {
                     }
                     "request_changes" => {
                         self.status = "Requesting changes...".to_string();
-                        std::thread::spawn(move || {
+                        let tx = tx.clone();
+                        self.task_manager.spawn(move || {
                             let body = if text.is_empty() {
                                 "Please address the requested changes."
                             } else {
@@ -306,7 +282,8 @@ impl App {
                     }
                     "comment" => {
                         self.status = "Posting comment...".to_string();
-                        std::thread::spawn(move || {
+                        let tx = tx.clone();
+                        self.task_manager.spawn(move || {
                             let body = if text.is_empty() {
                                 "Reviewed the changes."
                             } else {
@@ -357,7 +334,8 @@ impl App {
                         self.focus = Focus::Tree;
                         let g = github.clone();
                         let full_name = repo.full_name.clone();
-                        std::thread::spawn(move || {
+                        let tx = tx.clone();
+                        self.task_manager.spawn(move || {
                             let result = g.fetch_pull_request_detail(&full_name, number);
                             let _ = tx.send(NetworkEvent::PrDetailResult(
                                 result.map_err(|e| e.to_string()),
@@ -380,9 +358,9 @@ impl App {
             return;
         }
 
-        // Ctrl+P = \x10
-        if let KeyCode::Char(ch) = code
-            && ch == '\x10'
+        if self
+            .keybindings
+            .matches_key_with_mods("command_palette", &code, &event.modifiers)
         {
             self.toggle_command_palette();
             return;

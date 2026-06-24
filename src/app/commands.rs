@@ -1,7 +1,6 @@
 use super::{App, Focus, NetworkEvent, theme};
-use crate::github::GitHubClient;
+use crate::provider::GitProvider;
 use crossterm::event::KeyCode;
-use ratatui::text::Line;
 use secrecy::SecretString;
 use std::sync::Arc;
 use std::sync::mpsc;
@@ -42,6 +41,7 @@ impl App {
                 self.multi_selected_repos.len()
             ));
         }
+        commands.push("Show Info".to_string());
         commands.push("Change Theme".to_string());
         commands.push("Set Token".to_string());
         commands.push("Quit".to_string());
@@ -52,7 +52,7 @@ impl App {
         &mut self,
         code: KeyCode,
         tx: mpsc::Sender<NetworkEvent>,
-        github: Arc<GitHubClient>,
+        github: Arc<dyn GitProvider>,
     ) {
         if self.keybindings.matches_key("escape", &code) {
             self.command_palette_visible = false;
@@ -138,7 +138,7 @@ impl App {
         &mut self,
         cmd: String,
         tx: mpsc::Sender<NetworkEvent>,
-        github: Arc<GitHubClient>,
+        github: Arc<dyn GitProvider>,
     ) {
         match cmd.as_str() {
             "Search Repositories" => {
@@ -148,7 +148,8 @@ impl App {
             "List Starred Repos" => {
                 self.status = "Loading starred repos...".to_string();
                 let g = github.clone();
-                std::thread::spawn(move || {
+                let tx = tx.clone();
+                self.task_manager.spawn(move || {
                     let result = g.fetch_starred_repos(1, 30);
                     let _ = tx.send(NetworkEvent::StarredResult(
                         result.map_err(|e| e.to_string()),
@@ -187,42 +188,11 @@ impl App {
                 }
             }
             "Toggle Tree View" => {
-                if self.current_repo.is_some() {
-                    self.tree_text_mode = !self.tree_text_mode;
-                    self.preview_scroll = 0;
-                    if self.tree_text_mode {
-                        let branch = self.selected_branch_name();
-                        self.preview_title = format!(
-                            "tree {} [{}]",
-                            self.current_repo
-                                .as_ref()
-                                .map(|r| r.full_name.clone())
-                                .unwrap_or_default(),
-                            branch
-                        );
-                        self.preview_lines = self
-                            .tree_all
-                            .iter()
-                            .map(|node| {
-                                let indent = "  ".repeat(node.depth.min(20));
-                                let icon = if node.is_dir { "[D]" } else { "[F]" };
-                                Line::from(format!("{indent}{icon} {}", node.path))
-                            })
-                            .collect();
-                        self.current_preview_path = None;
-                        self.focus = Focus::Preview;
-                        self.status = "Tree view enabled in preview pane.".to_string();
-                    } else {
-                        self.preview_title = "Preview".to_string();
-                        self.preview_lines = vec![Line::from(
-                            "Tree preview disabled. Select a file and press Enter to preview.",
-                        )];
-                        self.focus = Focus::Tree;
-                        self.status = "Tree view disabled.".to_string();
-                    }
-                } else {
-                    self.status = "Open a repository first.".to_string();
-                }
+                self.toggle_tree_view();
+            }
+            "Show Info" => {
+                self.show_info = true;
+                self.status = "GitNapse info. Press Esc to close.".to_string();
             }
             "Change Theme" => {
                 let themes = theme::list_available_themes();
@@ -246,7 +216,8 @@ impl App {
                     self.status = "Loading issues...".to_string();
                     let g = github.clone();
                     let full_name = repo.full_name.clone();
-                    std::thread::spawn(move || {
+                    let tx = tx.clone();
+                    self.task_manager.spawn(move || {
                         let result = g.fetch_issues(&full_name, "open", 30);
                         let _ = tx.send(NetworkEvent::IssuesResult(
                             result.map_err(|e| e.to_string()),
@@ -261,7 +232,8 @@ impl App {
                     self.status = "Loading pull requests...".to_string();
                     let g = github.clone();
                     let full_name = repo.full_name.clone();
-                    std::thread::spawn(move || {
+                    let tx = tx.clone();
+                    self.task_manager.spawn(move || {
                         let result = g.fetch_pull_requests(&full_name, "open", 30);
                         let _ = tx.send(NetworkEvent::PrsResult(result.map_err(|e| e.to_string())));
                     });
@@ -275,7 +247,8 @@ impl App {
                     let g = github.clone();
                     let full_name = repo.full_name.clone();
                     let branch = self.selected_branch_name();
-                    std::thread::spawn(move || {
+                    let tx = tx.clone();
+                    self.task_manager.spawn(move || {
                         let result = g.fetch_recent_commits(&full_name, &branch, 30);
                         let _ = tx.send(NetworkEvent::CommitsResult(
                             result.map_err(|e| e.to_string()),
@@ -291,7 +264,8 @@ impl App {
                     let g = github.clone();
                     let full_name = repo.full_name.clone();
                     let branch = self.selected_branch_name();
-                    std::thread::spawn(move || {
+                    let tx = tx.clone();
+                    self.task_manager.spawn(move || {
                         let result = g.fetch_check_runs(&full_name, &branch);
                         let _ = tx.send(NetworkEvent::CheckRunsResult(
                             result.map_err(|e| e.to_string()),
@@ -307,7 +281,8 @@ impl App {
                     let g = github.clone();
                     let full_name = repo.full_name.clone();
                     let branch = self.selected_branch_name();
-                    std::thread::spawn(move || {
+                    let tx = tx.clone();
+                    self.task_manager.spawn(move || {
                         let result = g.fetch_workflow_runs(&full_name, &branch, 30);
                         let _ =
                             tx.send(NetworkEvent::WorkflowRunsResult(result.unwrap_or_default()));
@@ -343,7 +318,8 @@ impl App {
                             let full_name = repo.full_name.clone();
                             let base = base.clone();
                             let head = head.clone();
-                            std::thread::spawn(move || {
+                            let tx = tx.clone();
+                            self.task_manager.spawn(move || {
                                 let result = g.fetch_compare(&full_name, &base, &head);
                                 let _ = tx.send(NetworkEvent::CompareResult(
                                     result.map_err(|e| e.to_string()),
@@ -376,7 +352,7 @@ impl App {
                     } else {
                         let count = selected.len();
                         self.status = format!("Cloning {} repo(s) to {}...", count, dest);
-                        std::thread::spawn(move || {
+                        self.task_manager.spawn(move || {
                             for repo in &selected {
                                 let repo_path = std::path::PathBuf::from(&dest).join(&repo.name);
                                 if repo_path.exists() {
@@ -404,7 +380,7 @@ impl App {
         &mut self,
         action: String,
         tx: mpsc::Sender<NetworkEvent>,
-        github: Arc<GitHubClient>,
+        github: Arc<dyn GitProvider>,
     ) {
         match action.as_str() {
             "[Approve]" => {
@@ -440,7 +416,8 @@ impl App {
                 let full_name = repo.full_name.clone();
                 let number = detail.number;
                 let method = merge_method.to_string();
-                std::thread::spawn(move || {
+                let tx = tx.clone();
+                self.task_manager.spawn(move || {
                     let result = g.merge_pull_request(&full_name, number, None, Some(&method));
                     let _ = tx.send(NetworkEvent::PrMergeResult(
                         result.map_err(|e| e.to_string()),
@@ -460,7 +437,8 @@ impl App {
                 let g = github.clone();
                 let full_name = repo.full_name.clone();
                 let number = detail.number;
-                std::thread::spawn(move || {
+                let tx = tx.clone();
+                self.task_manager.spawn(move || {
                     match g.update_pull_request(&full_name, number, "closed") {
                         Ok(_) => {
                             let _ = tx.send(NetworkEvent::PrActionResult("PR closed.".to_string()));
@@ -485,7 +463,8 @@ impl App {
                 let g = github.clone();
                 let full_name = repo.full_name.clone();
                 let number = detail.number;
-                std::thread::spawn(move || {
+                let tx = tx.clone();
+                self.task_manager.spawn(move || {
                     let result = g.fetch_pull_request_reviews(&full_name, number);
                     let _ = tx.send(NetworkEvent::PrReviewsResult(
                         result.map_err(|e| e.to_string()),
@@ -505,7 +484,8 @@ impl App {
                 let g = github.clone();
                 let full_name = repo.full_name.clone();
                 let number = detail.number;
-                std::thread::spawn(move || {
+                let tx = tx.clone();
+                self.task_manager.spawn(move || {
                     let result = g.fetch_pull_request_comments(&full_name, number);
                     let _ = tx.send(NetworkEvent::PrCommentsResult(
                         result.map_err(|e| e.to_string()),
@@ -525,7 +505,8 @@ impl App {
                 let g = github.clone();
                 let full_name = repo.full_name.clone();
                 let number = detail.number;
-                std::thread::spawn(move || {
+                let tx = tx.clone();
+                self.task_manager.spawn(move || {
                     let result = g.fetch_pull_request_commits(&full_name, number);
                     let _ = tx.send(NetworkEvent::PrCommitsResult(
                         result.map_err(|e| e.to_string()),
@@ -543,7 +524,7 @@ impl App {
         action: String,
         text: String,
         tx: mpsc::Sender<NetworkEvent>,
-        github: Arc<GitHubClient>,
+        github: Arc<dyn GitProvider>,
     ) {
         match action.as_str() {
             "create_pr_title" => {
@@ -600,7 +581,8 @@ impl App {
                 let g = github.clone();
                 let full_name = repo.full_name.clone();
                 let body_clone = body.clone();
-                std::thread::spawn(move || {
+                let tx = tx.clone();
+                self.task_manager.spawn(move || {
                     let result = g.create_pull_request(
                         &full_name,
                         &title,

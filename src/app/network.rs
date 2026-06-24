@@ -27,7 +27,12 @@ impl App {
                 );
             }
             NetworkEvent::SearchResult(Err(e)) => {
-                self.status = format!("Search failed: {e}");
+                if e.contains("401") {
+                    self.status =
+                        "Authentication required. Press t to set a GitHub token.".to_string();
+                } else {
+                    self.status = format!("Search failed: {e}");
+                }
             }
             NetworkEvent::IssuesResult(Ok(issues)) => {
                 self.command_items = issues

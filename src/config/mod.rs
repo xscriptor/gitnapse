@@ -32,6 +32,27 @@ pub fn config_file() -> Result<PathBuf> {
 pub(crate) fn strip_jsonc_comments(input: &str) -> String {
     input
         .lines()
+        .map(|line| {
+            // Remove inline // comments (but not those inside strings)
+            let mut in_string = false;
+            let mut prev = ' ';
+            let mut result = String::with_capacity(line.len());
+            for ch in line.chars() {
+                if ch == '"' && prev != '\\' {
+                    in_string = !in_string;
+                }
+                if !in_string && ch == '/' && prev == '/' {
+                    // Remove the // and everything after, plus trailing space
+                    result.pop();
+                    break;
+                }
+                if !in_string || ch != '/' || prev != '/' {
+                    prev = ch;
+                    result.push(ch);
+                }
+            }
+            result.trim_end().to_string()
+        })
         .filter(|line| !line.trim_start().starts_with("//"))
         .collect::<Vec<_>>()
         .join("\n")

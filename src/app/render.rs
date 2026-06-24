@@ -237,7 +237,7 @@ pub fn render(frame: &mut Frame<'_>, app: &mut App) {
 }
 
 fn render_repo_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
-    if app.repos.is_empty() {
+    if app.show_info {
         let version = env!("CARGO_PKG_VERSION");
         let info = vec![
             Line::from(Span::raw("")),
@@ -253,12 +253,16 @@ fn render_repo_list(frame: &mut Frame<'_>, app: &App, area: Rect) {
             Line::from(Span::raw("")),
             Line::from(Span::raw("        Press / to search repositories")),
         ];
-        let block = Block::default().title("Welcome").borders(Borders::ALL);
+        let block = Block::default().title("Info").borders(Borders::ALL);
         let paragraph = Paragraph::new(info)
             .block(block)
             .alignment(Alignment::Left)
             .wrap(Wrap { trim: false });
         frame.render_widget(paragraph, area);
+        return;
+    }
+
+    if app.repos.is_empty() {
         return;
     }
 

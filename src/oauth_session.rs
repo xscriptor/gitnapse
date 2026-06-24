@@ -1,26 +1,15 @@
+use crate::runtime;
 use crate::secure_store;
 use anyhow::{Context, Result, anyhow};
 use directories::ProjectDirs;
 use reqwest::Client;
 use reqwest::header::{ACCEPT, CONTENT_TYPE, HeaderMap, HeaderValue, USER_AGENT};
-use secrecy::ExposeSecret;
+use secrecy::{ExposeSecret, zeroize::Zeroize};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tokio::runtime::Runtime;
 use url::form_urlencoded::Serializer;
-
-fn get_runtime() -> &'static Runtime {
-    static RUNTIME: OnceLock<Runtime> = OnceLock::new();
-    RUNTIME.get_or_init(|| {
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .expect("Cannot create tokio runtime for oauth_session")
-    })
-}
 
 const SESSION_FILE: &str = "oauth_session.json";
 const SESSION_SECRET_KEY: &str = "oauth_session_json";
@@ -36,6 +25,15 @@ pub struct OAuthSession {
     pub refresh_token: Option<String>,
     pub refresh_expires_at_unix: Option<u64>,
     pub client_id: String,
+}
+
+impl Drop for OAuthSession {
+    fn drop(&mut self) {
+        self.access_token.zeroize();
+        if let Some(ref mut rt) = self.refresh_token {
+            rt.zeroize();
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -124,18 +122,18 @@ pub fn resolve_access_token() -> Result<Option<String>> {
         .map(|exp| exp <= now.saturating_add(60))
         .unwrap_or(false);
     if !about_to_expire {
-        return Ok(Some(session.access_token));
+        return Ok(Some(session.access_token.clone()));
     }
 
     // If expiring/expired, attempt refresh when possible.
     if let Some(refreshed) = try_refresh(&session)? {
         session = refreshed;
         save_session(&session)?;
-        return Ok(Some(session.access_token));
+        return Ok(Some(session.access_token.clone()));
     }
 
     // No refresh available; caller can fallback to legacy token file.
-    Ok(Some(session.access_token))
+    Ok(Some(session.access_token.clone()))
 }
 
 fn try_refresh(session: &OAuthSession) -> Result<Option<OAuthSession>> {
@@ -168,7 +166,7 @@ fn try_refresh(session: &OAuthSession) -> Result<Option<OAuthSession>> {
     let client_id = session.client_id.clone();
     let refresh_token = refresh_token.clone();
 
-    get_runtime().block_on(async {
+    runtime::get_runtime().block_on(async {
         let mut headers = HeaderMap::new();
         headers.insert(USER_AGENT, HeaderValue::from_static("gitnapse/0.1"));
         headers.insert(ACCEPT, HeaderValue::from_static("application/json"));

@@ -1,7 +1,7 @@
 use crate::app::{App, Focus};
 use anyhow::Context;
 use crossterm::event::KeyCode;
-use secrecy::{ExposeSecret, SecretString, zeroize::Zeroize};
+use secrecy::{SecretString, zeroize::Zeroize};
 use std::path::PathBuf;
 
 fn fuzzy_match(needle: &str, haystack: &str) -> bool {
@@ -149,18 +149,14 @@ impl App {
             self.input_buffer.clear();
             self.focus = Focus::Repos;
         } else if self.keybindings.matches_key("enter", &code) {
-            let token: String = self.token_buffer.expose_secret().to_string();
+            let token = std::mem::take(&mut self.input_buffer);
+            self.token_buffer = SecretString::new(token.clone().into());
             self.save_token_from_input_str(token);
             self.token_buffer.zeroize();
-            self.input_buffer.clear();
         } else if self.keybindings.matches_key("backspace", &code) {
-            let mut s: String = self.token_buffer.expose_secret().to_string();
-            s.pop();
-            self.token_buffer = SecretString::new(s.into());
+            self.input_buffer.pop();
         } else if let KeyCode::Char(ch) = code {
-            let mut s: String = self.token_buffer.expose_secret().to_string();
-            s.push(ch);
-            self.token_buffer = SecretString::new(s.into());
+            self.input_buffer.push(ch);
         }
     }
 

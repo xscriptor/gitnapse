@@ -14,7 +14,7 @@ crossterm = "0.29"
 directories = "6.0"
 dotenvy = "0.15"
 
-keyring = "4.0"
+keyring = "=4.0.1"
 keyring-core = "1.0"
 octocrab = { version = "0.53", default-features = true }
 ratatui = "0.30"
@@ -35,6 +35,7 @@ webbrowser = "1.0"
 [dev-dependencies]
 mockito = "1.7"
 serial_test = "3.2"
+temp-env = "0.3"
 tempfile = "3.20"
 
 [package.metadata.deb]

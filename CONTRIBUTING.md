@@ -13,10 +13,18 @@ Thanks for your interest in contributing.
 
 ## Local Validation
 
-Run at minimum:
+The CI runs three mandatory checks. Run **all of them locally** before pushing:
 
 ```bash
-cargo check
+cargo fmt --check     # style: must pass without diff
+cargo clippy -- -D warnings  # lints: zero warnings allowed
+cargo test            # tests: all must pass
+```
+
+To auto-fix formatting issues:
+
+```bash
+cargo fmt
 ```
 
 If your changes affect behavior, update documentation in `README.md` and `docs/`.
