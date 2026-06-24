@@ -124,6 +124,28 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # ── Linux → generic .tar.gz ───────────────────────────────────────────────
+  build-linux-generic:
+    name: Build Linux (generic)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Build
+        run: cargo build --release --locked
+      - name: Package (.tar.gz)
+        run: |
+          asset="gitnapse-${RELEASE_TAG}-linux-x86_64.tar.gz"
+          tar -czf "${asset}" -C target/release gitnapse
+          echo "ASSET=${asset}" >> "$GITHUB_ENV"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: asset-linux-generic
+          path: ${{ env.ASSET }}
+          if-no-files-found: error
+          retention-days: 7
+
   # ── Windows → .exe ────────────────────────────────────────────────────────
   build-windows:
     name: Build Windows
@@ -186,6 +208,7 @@ jobs:
       - build-linux-ubuntu
       - build-linux-fedora
       - build-linux-arch
+      - build-linux-generic
       - build-windows
       - build-macos
     permissions:
